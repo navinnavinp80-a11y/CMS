@@ -6,6 +6,9 @@ export interface IContent extends Document {
   content: string;
   type: "post" | "page";
   status: "draft" | "published";
+  featuredImage?: string;
+  metaTitle?: string;
+  metaDescription?: string;
   author: mongoose.Types.ObjectId;
 }
 
@@ -40,6 +43,23 @@ const contentSchema = new Schema<IContent>(
       type: String,
       enum: ["draft", "published"],
       default: "draft",
+    },
+
+    featuredImage: {
+      type: String,
+      default: "",
+    },
+
+    metaTitle: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    metaDescription: {
+      type: String,
+      default: "",
+      trim: true,
     },
 
     author: {

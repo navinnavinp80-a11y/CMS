@@ -9,6 +9,7 @@ import contentRoutes from "./routes/contentRoutes";
 import mediaRoutes from "./routes/mediaRoutes";
 import dashboardRoutes from "./routes/dashboardRoutes";
 import visitRoutes from "./routes/visitRoutes";
+import publicRoutes from "./routes/publicRoutes";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
@@ -22,6 +23,7 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/auth", authRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/content", contentRoutes);
+app.use("/api/public/content", publicRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/visits", visitRoutes);

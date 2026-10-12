@@ -3,11 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteContent = exports.updateContent = exports.getContentById = exports.getAllContent = exports.createContent = void 0;
+exports.getPublicContentBySlug = exports.deleteContent = exports.updateContent = exports.getContentById = exports.getAllContent = exports.createContent = void 0;
 const Content_1 = __importDefault(require("../models/Content"));
 const createContent = async (req, res) => {
     try {
-        const { title, slug, content, type, status } = req.body;
+        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
         if (!title || !slug || !content || !type) {
             res.status(400).json({
                 message: "Title, slug and content are required",
@@ -27,6 +27,9 @@ const createContent = async (req, res) => {
             content,
             type,
             status: status || "draft",
+            featuredImage: featuredImage || "",
+            metaTitle: metaTitle || "",
+            metaDescription: metaDescription || "",
             author: req.user?.id,
         });
         res.status(201).json({
@@ -87,7 +90,7 @@ exports.getContentById = getContentById;
 const updateContent = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, slug, content, type, status } = req.body;
+        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
         const existingContent = await Content_1.default.findById(id);
         if (!existingContent) {
             res.status(404).json({
@@ -112,6 +115,15 @@ const updateContent = async (req, res) => {
         existingContent.content = content ?? existingContent.content;
         existingContent.type = type ?? existingContent.type;
         existingContent.status = status ?? existingContent.status;
+        if (featuredImage !== undefined) {
+            existingContent.featuredImage = featuredImage;
+        }
+        if (metaTitle !== undefined) {
+            existingContent.metaTitle = metaTitle;
+        }
+        if (metaDescription !== undefined) {
+            existingContent.metaDescription = metaDescription;
+        }
         await existingContent.save();
         res.status(200).json({
             message: "Content updated successfully",
@@ -148,3 +160,29 @@ const deleteContent = async (req, res) => {
     }
 };
 exports.deleteContent = deleteContent;
+const getPublicContentBySlug = async (req, res) => {
+    try {
+        const { slug } = req.params;
+        const content = await Content_1.default.findOne({
+            slug,
+            status: "published",
+        }).populate("author", "name email");
+        if (!content) {
+            res.status(404).json({
+                message: "Published content not found",
+            });
+            return;
+        }
+        res.status(200).json({
+            message: "Published page fetched successfully",
+            content,
+        });
+    }
+    catch (error) {
+        console.error("Get public content error:", error);
+        res.status(500).json({
+            message: "Server error",
+        });
+    }
+};
+exports.getPublicContentBySlug = getPublicContentBySlug;

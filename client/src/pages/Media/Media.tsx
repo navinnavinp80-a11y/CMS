@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Upload,
   Image as ImageIcon,
@@ -19,6 +20,7 @@ interface MediaItem {
 const API_URL = "http://localhost:5000";
 
 function Media() {
+  const navigate = useNavigate();
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -185,6 +187,26 @@ function Media() {
       <div className="media-header">
 
         <div>
+          <button
+            type="button"
+            className="media-back-to-dashboard"
+            onClick={() => navigate("/dashboard")}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#4f46e5",
+              cursor: "pointer",
+              fontSize: "13px",
+              fontWeight: 600,
+              padding: 0,
+              marginBottom: "6px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+          >
+            ← Back to Dashboard
+          </button>
           <h1>Media Library</h1>
 
           <p>

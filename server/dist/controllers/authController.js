@@ -9,7 +9,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
 const registerUser = async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        const { name, email, password } = req.body;
         // Check required fields
         if (!name || !email || !password) {
             res.status(400).json({
@@ -27,12 +27,12 @@ const registerUser = async (req, res) => {
         }
         // Hash password
         const hashedPassword = await bcryptjs_1.default.hash(password, 10);
-        // Create user
+        // Create user (strictly default to editor role for public registration)
         const user = await User_1.default.create({
             name,
             email,
             password: hashedPassword,
-            role: role || "editor",
+            role: "editor",
         });
         res.status(201).json({
             message: "User registered successfully",

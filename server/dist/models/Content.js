@@ -61,6 +61,20 @@ const contentSchema = new mongoose_1.Schema({
         enum: ["draft", "published"],
         default: "draft",
     },
+    featuredImage: {
+        type: String,
+        default: "",
+    },
+    metaTitle: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+    metaDescription: {
+        type: String,
+        default: "",
+        trim: true,
+    },
     author: {
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: "User",

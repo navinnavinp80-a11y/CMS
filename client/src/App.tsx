@@ -6,12 +6,15 @@ import CreateContent from "./pages/Content/CreateContent";
 import EditContent from "./pages/Content/EditContent";
 import PageBuilder from "./pages/PageBuilder/PageBuilder";
 import Media from "./pages/Media/Media";
+import PublicPageViewer from "./pages/PublicPageViewer/PublicPageViewer";
+import Signup from "./pages/Signup/Signup";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
 
         <Route
           path="/dashboard"
@@ -46,6 +49,11 @@ function App() {
         <Route
           path="/media"
           element={<Media />}
+        />
+
+        <Route
+          path="/p/:slug"
+          element={<PublicPageViewer />}
         />
 
         <Route

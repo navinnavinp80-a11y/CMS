@@ -8,7 +8,7 @@ export const registerUser = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     // Check required fields
     if (!name || !email || !password) {
@@ -31,12 +31,12 @@ export const registerUser = async (
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user (strictly default to editor role for public registration)
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role: role || "editor",
+      role: "editor",
     });
 
     res.status(201).json({

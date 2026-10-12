@@ -1,0 +1,33 @@
+import type { PageComponent } from "../types";
+
+interface ButtonBlockProps {
+  component: PageComponent;
+  isPreviewMode?: boolean;
+}
+
+export function ButtonBlock({ component, isPreviewMode }: ButtonBlockProps) {
+  const url = component.buttonUrl || "#";
+
+  if (isPreviewMode && url && url !== "#") {
+    return (
+      <section className="preview-button">
+        <a
+          href={url}
+          className="button-link-btn"
+          target={url.startsWith("http") ? "_blank" : undefined}
+          rel={url.startsWith("http") ? "noopener noreferrer" : undefined}
+        >
+          {component.buttonText || "Button"}
+        </a>
+      </section>
+    );
+  }
+
+  return (
+    <section className="preview-button">
+      <button type="button" onClick={(e) => e.preventDefault()}>
+        {component.buttonText || "Button"}
+      </button>
+    </section>
+  );
+}

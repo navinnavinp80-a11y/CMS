@@ -6,7 +6,7 @@ export const createContent = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { title, slug, content,type, status } = req.body;
+    const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
 
     if (!title || !slug || !content || !type) {
       res.status(400).json({
@@ -30,6 +30,9 @@ export const createContent = async (
       content,
       type,
       status: status || "draft",
+      featuredImage: featuredImage || "",
+      metaTitle: metaTitle || "",
+      metaDescription: metaDescription || "",
       author: req.user?.id,
     });
 
@@ -104,8 +107,8 @@ export const updateContent = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, slug, content, type, status } = req.body;
-    
+    const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
+
     const existingContent = await Content.findById(id);
 
     if (!existingContent) {
@@ -134,6 +137,15 @@ export const updateContent = async (
     existingContent.content = content ?? existingContent.content;
     existingContent.type = type ?? existingContent.type;
     existingContent.status = status ?? existingContent.status;
+    if (featuredImage !== undefined) {
+      existingContent.featuredImage = featuredImage;
+    }
+    if (metaTitle !== undefined) {
+      existingContent.metaTitle = metaTitle;
+    }
+    if (metaDescription !== undefined) {
+      existingContent.metaDescription = metaDescription;
+    }
 
     await existingContent.save();
 
@@ -171,6 +183,38 @@ export const deleteContent = async (
     });
   } catch (error) {
     console.error("Delete content error:", error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+export const getPublicContentBySlug = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { slug } = req.params;
+
+    const content = await Content.findOne({
+      slug,
+      status: "published",
+    }).populate("author", "name email");
+
+    if (!content) {
+      res.status(404).json({
+        message: "Published content not found",
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Published page fetched successfully",
+      content,
+    });
+  } catch (error) {
+    console.error("Get public content error:", error);
 
     res.status(500).json({
       message: "Server error",
