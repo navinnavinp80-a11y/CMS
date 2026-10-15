@@ -87,49 +87,49 @@ export const getDashboardStats = async (
       userContentIds.length === 0
         ? []
         : await Visit.aggregate([
-            {
-              $match: {
-                content: {
-                  $in: userContentIds,
-                },
+          {
+            $match: {
+              content: {
+                $in: userContentIds,
               },
             },
-            {
-              $group: {
-                _id: "$content",
-                visits: {
-                  $sum: 1,
-                },
+          },
+          {
+            $group: {
+              _id: "$content",
+              visits: {
+                $sum: 1,
               },
             },
-            {
-              $sort: {
-                visits: -1,
-              },
+          },
+          {
+            $sort: {
+              visits: -1,
             },
-            {
-              $limit: 5,
+          },
+          {
+            $limit: 5,
+          },
+          {
+            $lookup: {
+              from: "contents",
+              localField: "_id",
+              foreignField: "_id",
+              as: "article",
             },
-            {
-              $lookup: {
-                from: "contents",
-                localField: "_id",
-                foreignField: "_id",
-                as: "article",
-              },
+          },
+          {
+            $unwind: "$article",
+          },
+          {
+            $project: {
+              _id: 1,
+              title: "$article.title",
+              slug: "$article.slug",
+              visits: 1,
             },
-            {
-              $unwind: "$article",
-            },
-            {
-              $project: {
-                _id: 1,
-                title: "$article.title",
-                slug: "$article.slug",
-                visits: 1,
-              },
-            },
-          ]);
+          },
+        ]);
 
     // Fetch user details for verified identity in UI
     const user = await User.findById(userObjectId).select("name email role");
@@ -138,11 +138,11 @@ export const getDashboardStats = async (
       message: "Dashboard statistics fetched successfully",
       user: user
         ? {
-            id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-          }
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        }
         : null,
       stats: {
         totalPosts,

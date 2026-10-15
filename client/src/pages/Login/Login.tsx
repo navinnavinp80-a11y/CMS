@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   Mail,
   Lock,
@@ -14,10 +14,13 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { API_URL } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,11 +59,10 @@ function Login() {
       }
 
       if (data.token) {
-        localStorage.setItem("token", data.token);
-        if (data.user) {
-          localStorage.setItem("user", JSON.stringify(data.user));
-        }
-        navigate("/dashboard");
+        login(data.token, data.user);
+        const fromPath = (location.state as any)?.from?.pathname;
+        const destination = fromPath && fromPath !== "/" && fromPath !== "/login" ? fromPath : "/dashboard";
+        navigate(destination, { replace: true });
       } else {
         setError("Authentication token missing in server response.");
       }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -27,16 +27,28 @@ import {
   Sparkles,
   Send,
   ExternalLink,
+  Globe,
 } from "lucide-react";
 import "./PageBuilder.css";
 import { PageSettingsModal, generateSlug } from "../../components/PageBuilder/PageSettingsModal";
 import { PAGE_TEMPLATES, type PageTemplateDefinition } from "../../components/PageBuilder/templates";
 import { PageTemplatesModal } from "../../components/PageBuilder/PageTemplatesModal";
 import { TemplateConfirmModal } from "../../components/PageBuilder/TemplateConfirmModal";
+import { PageSelectorDropdown, type PageListItem } from "../../components/PageBuilder/PageSelectorDropdown";
 
 import type { ComponentType, PageComponent } from "../../components/PageBuilder/types";
 
 type DeviceMode = "desktop" | "tablet" | "mobile";
+
+interface PageSnapshot {
+  title: string;
+  slug: string;
+  status: "draft" | "published";
+  featuredImage: string;
+  metaTitle: string;
+  metaDescription: string;
+  componentsJson: string;
+}
 
 // Canvas Blocks
 import { HeroBlock } from "../../components/PageBuilder/blocks/HeroBlock";
@@ -189,6 +201,106 @@ function PageBuilder() {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [activeColumnSide, setActiveColumnSide] = useState<"left" | "right" | null>(null);
 
+  const [pagesList, setPagesList] = useState<PageListItem[]>([]);
+  const [pagesLoading, setPagesLoading] = useState(false);
+  const [pagesError, setPagesError] = useState("");
+  const [saveNotice, setSaveNotice] = useState("");
+
+  const [lastSavedState, setLastSavedState] = useState<PageSnapshot | null>(null);
+
+  const isDirty = useMemo(() => {
+    if (!lastSavedState) return false;
+    return (
+      pageTitle !== lastSavedState.title ||
+      slug !== lastSavedState.slug ||
+      status !== lastSavedState.status ||
+      featuredImage !== lastSavedState.featuredImage ||
+      metaTitle !== lastSavedState.metaTitle ||
+      metaDescription !== lastSavedState.metaDescription ||
+      JSON.stringify(components) !== lastSavedState.componentsJson
+    );
+  }, [
+    lastSavedState,
+    pageTitle,
+    slug,
+    status,
+    featuredImage,
+    metaTitle,
+    metaDescription,
+    components,
+  ]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  const fetchPagesList = async () => {
+    try {
+      setPagesLoading(true);
+      setPagesError("");
+
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:5000/api/content?type=page", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to fetch pages");
+      }
+
+      const all = data.contents || data || [];
+      const pagesOnly = Array.isArray(all)
+        ? all.filter((item: any) => item.type === "page")
+        : [];
+
+      setPagesList(pagesOnly);
+    } catch (err) {
+      console.error("Fetch pages list error:", err);
+      setPagesError(
+        err instanceof Error ? err.message : "Failed to load pages"
+      );
+    } finally {
+      setPagesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPagesList();
+  }, []);
+
+  const resetToNewPage = () => {
+    setPageTitle("");
+    setSlug("");
+    setStatus("draft");
+    setFeaturedImage("");
+    setMetaTitle("");
+    setMetaDescription("");
+    setIsSlugUserModified(false);
+    setComponents([]);
+    setSelectedId(null);
+    setError("");
+    setSaveNotice("");
+    setLastSavedState({
+      title: "",
+      slug: "",
+      status: "draft",
+      featuredImage: "",
+      metaTitle: "",
+      metaDescription: "",
+      componentsJson: JSON.stringify([]),
+    });
+  };
+
   const selectedComponent = components.find(
     (component) => component.id === selectedId
   );
@@ -239,6 +351,15 @@ function PageBuilder() {
       }
 
       setComponents(savedComponents);
+      setLastSavedState({
+        title: page.title || "",
+        slug: page.slug || "",
+        status: page.status || "draft",
+        featuredImage: page.featuredImage || "",
+        metaTitle: page.metaTitle || "",
+        metaDescription: page.metaDescription || "",
+        componentsJson: JSON.stringify(savedComponents),
+      });
     } catch (error) {
       console.error("Fetch page error:", error);
 
@@ -252,11 +373,239 @@ function PageBuilder() {
     }
   };
 
-  useEffect(() => {
-    if (isEditMode) {
-      fetchPage();
+  const getUniqueSlug = (
+    baseText: string,
+    excludeId?: string,
+    list: PageListItem[] = pagesList
+  ): string => {
+    let candidate = generateSlug(baseText);
+    if (!candidate) {
+      candidate = `page-${Date.now()}`;
     }
-  }, [isEditMode, id]);
+    const collision = list.some(
+      (p) => p.slug === candidate && p._id !== excludeId
+    );
+    if (collision) {
+      let index = 1;
+      while (list.some((p) => p.slug === `${candidate}-${index}` && p._id !== excludeId)) {
+        index++;
+      }
+      candidate = `${candidate}-${index}`;
+    }
+    return candidate;
+  };
+
+  useEffect(() => {
+    if (id) {
+      fetchPage();
+    } else {
+      resetToNewPage();
+    }
+  }, [id]);
+
+  const handleSelectPage = async (page: PageListItem) => {
+    if (page._id === id || loading) return;
+
+    try {
+      setLoading(true);
+      setError("");
+      const token = localStorage.getItem("token");
+
+      // Preserve unsaved changes on current page before switching
+      if (!id) {
+        if (components.length > 0 || pageTitle.trim()) {
+          const prevTitle = pageTitle.trim() || (pagesList.length === 0 ? "Home" : "Untitled Page");
+          const prevSlug = getUniqueSlug(slug.trim() || prevTitle, undefined, pagesList);
+
+          await fetch("http://localhost:5000/api/content", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              title: prevTitle,
+              slug: prevSlug,
+              content: JSON.stringify(components),
+              type: "page",
+              status,
+              featuredImage,
+              metaTitle,
+              metaDescription,
+            }),
+          });
+        }
+      } else if (isDirty) {
+        const currentTitle = pageTitle.trim() || "Untitled Page";
+        const currentSlug = getUniqueSlug(slug.trim() || currentTitle, id, pagesList);
+
+        await fetch(`http://localhost:5000/api/content/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: currentTitle,
+            slug: currentSlug,
+            content: JSON.stringify(components),
+            type: "page",
+            status,
+            featuredImage,
+            metaTitle,
+            metaDescription,
+          }),
+        });
+      }
+
+      setSelectedId(null);
+      await fetchPagesList();
+    } catch (saveErr) {
+      console.error("Auto-save prior to switching page failed:", saveErr);
+    } finally {
+      setLoading(false);
+    }
+
+    navigate(`/content/edit-page/${page._id}`);
+  };
+
+  const handleCreateNewPage = async () => {
+    if (loading) return;
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const token = localStorage.getItem("token");
+
+      // 1. If currently on an unsaved page with content or title, save it as a new DB record first!
+      if (!id) {
+        if (components.length > 0 || pageTitle.trim()) {
+          const prevTitle = pageTitle.trim() || (pagesList.length === 0 ? "Home" : "Untitled Page");
+          const prevSlug = getUniqueSlug(slug.trim() || prevTitle, undefined, pagesList);
+
+          await fetch("http://localhost:5000/api/content", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              title: prevTitle,
+              slug: prevSlug,
+              content: JSON.stringify(components),
+              type: "page",
+              status,
+              featuredImage,
+              metaTitle,
+              metaDescription,
+            }),
+          });
+        }
+      } else if (isDirty) {
+        // Currently on an existing page and have unsaved changes - save it!
+        const currentTitle = pageTitle.trim() || "Untitled Page";
+        const currentSlug = getUniqueSlug(slug.trim() || currentTitle, id, pagesList);
+
+        await fetch(`http://localhost:5000/api/content/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            title: currentTitle,
+            slug: currentSlug,
+            content: JSON.stringify(components),
+            type: "page",
+            status,
+            featuredImage,
+            metaTitle,
+            metaDescription,
+          }),
+        });
+      }
+
+      // 2. Fetch fresh pages list from backend
+      const listRes = await fetch("http://localhost:5000/api/content?type=page", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      let currentPages: PageListItem[] = [];
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const all = listData.contents || listData || [];
+        currentPages = Array.isArray(all) ? all.filter((item: any) => item.type === "page") : [];
+      } else {
+        currentPages = [...pagesList];
+      }
+
+      // 3. Compute title and unique slug for the new page
+      const hasHome = currentPages.some(
+        (p) => p.slug === "home" || (p.title && p.title.toLowerCase() === "home")
+      );
+      const newPageNumber = currentPages.length + 1;
+      const newTitle = !hasHome && currentPages.length === 0 ? "Home" : `Page ${newPageNumber}`;
+      const newSlug = getUniqueSlug(newTitle, undefined, currentPages);
+
+      // 4. Create the new page record in the database
+      const createRes = await fetch("http://localhost:5000/api/content", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: newTitle,
+          slug: newSlug,
+          content: JSON.stringify([]),
+          type: "page",
+          status: "draft",
+          featuredImage: "",
+          metaTitle: "",
+          metaDescription: "",
+        }),
+      });
+
+      const createData = await createRes.json();
+      if (!createRes.ok) {
+        throw new Error(createData.message || "Failed to create new page");
+      }
+
+      const newPage = createData.content || createData;
+
+      // 5. Update local pages list
+      const updatedList = [
+        newPage,
+        ...currentPages.filter((p) => p._id !== newPage._id),
+      ];
+      setPagesList(updatedList);
+      setSelectedId(null);
+
+      setSaveNotice(`"${newTitle}" created successfully!`);
+      setTimeout(() => setSaveNotice(""), 4000);
+
+      // 6. Navigate to the new page's edit route
+      navigate(`/content/edit-page/${newPage._id}`);
+    } catch (err: any) {
+      console.error("Create new page error:", err);
+      setError(err instanceof Error ? err.message : "Failed to create new page");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    if (isDirty) {
+      if (
+        !window.confirm(
+          "You have unsaved changes. Are you sure you want to exit to the content list?"
+        )
+      ) {
+        return;
+      }
+    }
+    navigate("/content");
+  };
 
   const fetchMedia = async () => {
     try {
@@ -459,14 +808,17 @@ function PageBuilder() {
     }
 
     if (type === "navbar") {
+      const aboutPage = pagesList.find((p) => p.title.toLowerCase() === "about" || p.slug === "about" || p.slug === "about-us");
+      const contactPage = pagesList.find((p) => p.title.toLowerCase() === "contact" || p.slug === "contact");
+
       return {
         id,
         type,
         navbarLogo: "My Website",
         navbarItems: [
           { label: "Home", url: "/" },
-          { label: "About", url: "/about" },
-          { label: "Contact", url: "/contact" },
+          { label: "About", url: aboutPage ? `/${aboutPage.slug}` : "/about-us" },
+          { label: "Contact", url: contactPage ? `/${contactPage.slug}` : "/contact" },
         ],
       };
     }
@@ -690,10 +1042,14 @@ function PageBuilder() {
       const token = localStorage.getItem("token");
       const contentJson = JSON.stringify(components);
 
-      const finalTitle = pageTitle.trim() || "Untitled Page";
-      const finalSlug = slug.trim()
-        ? generateSlug(slug)
-        : generateSlug(finalTitle) || `page-${Date.now()}`;
+      const finalTitle =
+        pageTitle.trim() ||
+        (pagesList.length === 0 ? "Home" : "Untitled Page");
+      const finalSlug = getUniqueSlug(
+        slug.trim() || finalTitle,
+        id,
+        pagesList
+      );
 
       const url = isEditMode
         ? `http://localhost:5000/api/content/${id}`
@@ -726,10 +1082,35 @@ function PageBuilder() {
       }
 
       const savedContent = data.content || data;
+
+      setPageTitle(savedContent.title || finalTitle);
+      setSlug(savedContent.slug || finalSlug);
+      setStatus(nextStatus);
+
+      // Update snapshot of saved state so isDirty becomes false
+      setLastSavedState({
+        title: savedContent.title || finalTitle,
+        slug: savedContent.slug || finalSlug,
+        status: nextStatus,
+        featuredImage,
+        metaTitle,
+        metaDescription,
+        componentsJson: contentJson,
+      });
+
+      // Display success feedback
+      setSaveNotice(
+        nextStatus === "published"
+          ? "Page published successfully!"
+          : "Draft saved successfully!"
+      );
+      setTimeout(() => setSaveNotice(""), 4000);
+
+      // Refresh pages list in dropdown
+      await fetchPagesList();
+
       if (!isEditMode && savedContent?._id) {
         navigate(`/content/edit-page/${savedContent._id}`, { replace: true });
-      } else {
-        navigate("/content");
       }
     } catch (err) {
       console.error("Save page error:", err);
@@ -764,7 +1145,8 @@ function PageBuilder() {
       return;
     }
 
-    const publicUrl = `${window.location.origin}/p/${finalSlug}`;
+    const isHomePage = finalSlug === "home" || finalSlug === "index" || (!finalSlug && pageTitle.toLowerCase() === "home");
+    const publicUrl = isHomePage ? `${window.location.origin}/home` : `${window.location.origin}/${finalSlug}`;
     window.open(publicUrl, "_blank");
   };
 
@@ -775,7 +1157,7 @@ function PageBuilder() {
         <div className="builder-header-left">
           <button
             className="builder-back"
-            onClick={() => navigate("/content")}
+            onClick={handleBack}
           >
             <ArrowLeft size={18} />
           </button>
@@ -903,6 +1285,7 @@ function PageBuilder() {
       </div>
 
       {error && <div className="builder-error">{error}</div>}
+      {saveNotice && <div className="builder-success-banner">{saveNotice}</div>}
 
       {/* MAIN BUILDER */}
       <div className={`builder-layout ${isPreviewMode ? "preview-mode-layout" : ""}`}>
@@ -1010,13 +1393,68 @@ function PageBuilder() {
           onDragOver={(e) => !isPreviewMode && e.preventDefault()}
           onDrop={(e) => !isPreviewMode && handleCanvasDrop(e)}
         >
-          {!isPreviewMode && (
-            <div className="canvas-toolbar">
-              <span>Page Preview</span>
-            </div>
-          )}
-
           <div className={`page-canvas ${isPreviewMode ? "preview-canvas" : ""} device-${deviceMode}`}>
+            {/* CANVAS BROWSER CHROME HEADER */}
+            <div className="canvas-browser-chrome">
+              <div className="chrome-left">
+                <div className="chrome-window-dots">
+                  <span className="dot dot-close" />
+                  <span className="dot dot-minimize" />
+                  <span className="dot dot-maximize" />
+                </div>
+
+                <PageSelectorDropdown
+                  currentPageTitle={pageTitle}
+                  currentId={id}
+                  pages={pagesList}
+                  loading={pagesLoading}
+                  error={pagesError}
+                  onSelectPage={handleSelectPage}
+                  onCreateNewPage={handleCreateNewPage}
+                  onRetry={fetchPagesList}
+                />
+              </div>
+
+              <div className="chrome-center">
+                <div
+                  className="chrome-domain-pill"
+                  onClick={handleViewPage}
+                  title="Click to view live page"
+                >
+                  <Globe size={13} className="chrome-domain-icon" />
+                  <span className="chrome-domain-text">
+                    {window.location.host}{slug === "home" || slug === "index" || (!slug && pageTitle.toLowerCase() === "home") ? "/" : `/${slug || "untitled"}`}
+                  </span>
+                  {status === "published" ? (
+                    <span className="chrome-live-tag">Live</span>
+                  ) : (
+                    <span className="chrome-draft-tag">Draft</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="chrome-right">
+                <div className="chrome-device-toggles">
+                  <button
+                    type="button"
+                    className={`chrome-device-btn ${deviceMode === "desktop" ? "active" : ""}`}
+                    onClick={() => setDeviceMode("desktop")}
+                    title="Desktop Preview"
+                  >
+                    <Monitor size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`chrome-device-btn ${deviceMode === "mobile" ? "active" : ""}`}
+                    onClick={() => setDeviceMode("mobile")}
+                    title="Mobile Preview"
+                  >
+                    <Smartphone size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {components.length === 0 ? (
               <div className="canvas-empty">
                 <LayoutTemplate size={42} />
@@ -1167,6 +1605,7 @@ function PageBuilder() {
                     updateNavItem={updateNavItem}
                     addNavItem={addNavItem}
                     removeNavItem={removeNavItem}
+                    pages={pagesList}
                   />
                 )}
 

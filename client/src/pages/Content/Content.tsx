@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -7,9 +8,9 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
-
-import { useNavigate, useSearchParams } from "react-router-dom";
+import AdminLayout from "../../components/Layout/AdminLayout";
 import "./Content.css";
 
 interface ContentItem {
@@ -19,62 +20,80 @@ interface ContentItem {
   content: string;
   type: "post" | "page";
   status: "draft" | "published";
-  author: string;
+  author: any;
   createdAt: string;
 }
 
-function Content() {
+export default function Content() {
   const [contents, setContents] = useState<ContentItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"all" | "post" | "page" | "draft" | "published">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPlacement, setMenuPlacement] = useState<"down" | "up">("down");
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const statusFilter = searchParams.get("status");
-  const typeFilter = searchParams.get("type");
+  useEffect(() => {
+    const statusParam = searchParams.get("status");
+    const typeParam = searchParams.get("type");
+    if (statusParam === "draft") {
+      setActiveTab("draft");
+    } else if (statusParam === "published") {
+      setActiveTab("published");
+    } else if (typeParam === "page") {
+      setActiveTab("page");
+    } else if (typeParam === "post") {
+      setActiveTab("post");
+    } else {
+      setActiveTab("all");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchContents();
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = () => {
-      setOpenMenuId(null);
+    const handleClickOutside = () => setOpenMenuId(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuId(null);
     };
-
     document.addEventListener("click", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
 
   const fetchContents = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        "http://localhost:5000/api/content",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch("http://localhost:5000/api/content", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await response.json();
-
       if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          navigate("/login", { replace: true });
+          return;
+        }
         throw new Error(data.message || "Failed to fetch content");
       }
 
       setContents(data.contents || data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch contents:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to load contents"
-      );
+      setError(err instanceof Error ? err.message : "Failed to load contents");
     } finally {
       setLoading(false);
     }
@@ -82,257 +101,333 @@ function Content() {
 
   const handleDelete = async (id: string, title: string) => {
     setOpenMenuId(null);
-
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${title}"?`
-    );
-
+    const confirmed = window.confirm(`Are you sure you want to delete "${title}"?`);
     if (!confirmed) return;
 
     try {
       setError("");
       const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        `http://localhost:5000/api/content/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`http://localhost:5000/api/content/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(data.message || "Failed to delete content");
       }
 
       setContents((prev) => prev.filter((item) => item._id !== id));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Delete content error:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to delete content"
-      );
+      setError(err instanceof Error ? err.message : "Failed to delete content");
     }
   };
 
-  const filteredContents = contents.filter((item) => {
-    if (statusFilter && item.status !== statusFilter) return false;
-    if (typeFilter && item.type !== typeFilter) return false;
-    const search = searchTerm.toLowerCase().trim();
-    if (!search) return true;
+  // Group all pages under one website entry so Home, About, and Contact are not listed as individual rows
+  const displayItems = useMemo(() => {
+    const posts = contents.filter((item) => item.type === "post");
+    const pages = contents.filter((item) => item.type === "page");
+
+    if (pages.length === 0) {
+      return posts;
+    }
+
+    const homePage =
+      pages.find((p) => p.slug === "home" || p.title.toLowerCase() === "home") ||
+      pages[0];
+
+    const websiteEntry: ContentItem = {
+      _id: homePage._id,
+      title: "My Website",
+      slug: "home",
+      content: homePage.content,
+      type: "page",
+      status: pages.some((p) => p.status === "published") ? "published" : "draft",
+      author: homePage.author,
+      createdAt: homePage.createdAt,
+    };
+
+    return [websiteEntry, ...posts];
+  }, [contents]);
+
+  const filteredContents = displayItems.filter((item) => {
+    if (activeTab === "draft" && item.status !== "draft") return false;
+    if (activeTab === "published" && item.status !== "published") return false;
+    if (activeTab === "page" && item.type !== "page") return false;
+    if (activeTab === "post" && item.type !== "post") return false;
+
+    const query = searchTerm.toLowerCase().trim();
+    if (!query) return true;
     return (
-      (item.title && item.title.toLowerCase().includes(search)) ||
-      (item.slug && item.slug.toLowerCase().includes(search))
+      (item.title && item.title.toLowerCase().includes(query)) ||
+      (item.slug && item.slug.toLowerCase().includes(query))
     );
   });
 
+  const handleToggleMenu = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    id: string,
+    index: number
+  ) => {
+    e.stopPropagation();
+    if (openMenuId === id) {
+      setOpenMenuId(null);
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const isNearBottom =
+        filteredContents.length > 1 && index >= filteredContents.length - 1;
+      const shouldOpenUp = isNearBottom || (spaceBelow < 180 && rect.top > 180);
+      setMenuPlacement(shouldOpenUp ? "up" : "down");
+      setOpenMenuId(id);
+    }
+  };
+
   return (
-    <div className="content-page">
-      <div className="content-header">
-        <div>
-          <button
-            type="button"
-            className="content-back-to-dashboard"
-            onClick={() => navigate("/dashboard")}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#4f46e5",
-              cursor: "pointer",
-              fontSize: "13px",
-              fontWeight: 600,
-              padding: 0,
-              marginBottom: "6px",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-          <h1>
-            {statusFilter === "draft"
-              ? "Draft Contents"
-              : typeFilter === "page"
-                ? "Pages"
-                : "All Contents"}
-          </h1>
-          <p>
-            {statusFilter === "draft"
-              ? "View and manage your draft posts and pages."
-              : typeFilter === "page"
-                ? "View and manage standalone pages created in Nexus CMS."
-                : "Manage all your posts, pages, and digital experiences."}
-          </p>
+    <AdminLayout contentCount={displayItems.length}>
+      <div className="content-page-wrapper">
+        {/* Header */}
+        <div className="content-page-header">
+          <div className="content-header-title-group">
+            <h1>Content Library</h1>
+            <p>Create, manage, and publish posts and landing pages across your CMS.</p>
+          </div>
+
+          <div className="content-header-actions">
+            <button
+              type="button"
+              className="cms-btn-secondary"
+              onClick={() => navigate("/content/create-page")}
+            >
+              <Globe size={16} />
+              <span>Create Page</span>
+            </button>
+
+            <button
+              type="button"
+              className="cms-btn-primary"
+              onClick={() => navigate("/content/create")}
+            >
+              <Plus size={16} />
+              <span>Create Blog</span>
+            </button>
+          </div>
         </div>
 
-        <div className="create-content-actions">
-          <button
-            className="create-blog-button"
-            onClick={() =>
-              navigate("/content/create")
-            }
-          >
-            <Plus size={17} />
-            Create Blog
-          </button>
+        {error && <div className="content-error-banner">{error}</div>}
 
-          <button
-            className="create-page-button"
-            onClick={() =>
-              navigate("/content/create-page")
-            }
-          >
-            <Globe size={17} />
-            Create Page
-          </button>
+        {/* Filters Toolbar */}
+        <div className="content-toolbar-card">
+          <div className="content-filter-tabs">
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === "all" ? "active" : ""}`}
+              onClick={() => setActiveTab("all")}
+            >
+              All ({displayItems.length})
+            </button>
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === "post" ? "active" : ""}`}
+              onClick={() => setActiveTab("post")}
+            >
+              Posts ({displayItems.filter((c) => c.type === "post").length})
+            </button>
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === "page" ? "active" : ""}`}
+              onClick={() => setActiveTab("page")}
+            >
+              Pages ({displayItems.filter((c) => c.type === "page").length})
+            </button>
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === "published" ? "active" : ""}`}
+              onClick={() => setActiveTab("published")}
+            >
+              Published ({displayItems.filter((c) => c.status === "published").length})
+            </button>
+            <button
+              type="button"
+              className={`filter-tab-btn ${activeTab === "draft" ? "active" : ""}`}
+              onClick={() => setActiveTab("draft")}
+            >
+              Drafts ({displayItems.filter((c) => c.status === "draft").length})
+            </button>
+          </div>
+
+          <div className="content-search-input-box">
+            <Search size={15} className="content-search-icon" />
+            <input
+              type="text"
+              placeholder="Search by title or slug..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
 
-      {error && <div className="content-error-banner">{error}</div>}
-
-      <div className="content-toolbar">
-        <div className="content-search">
-          <Search size={17} />
-          <input
-            type="text"
-            placeholder="Search content..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="content-table-card">
-        {loading ? (
-          <div className="content-empty">
-            Loading content...
-          </div>
-        ) : contents.length === 0 ? (
-          <div className="content-empty">
-            <FileText size={36} />
-
-            <h3>No content yet</h3>
-
-            <p>
-              Create your first post or page to get started.
-            </p>
-          </div>
-        ) : filteredContents.length === 0 ? (
-          <div className="content-empty">
-            <FileText size={36} />
-
-            <h3>No matching content found</h3>
-
-            <p>
-              No posts or pages match "{searchTerm}".
-            </p>
-          </div>
-        ) : (
-          <div className="content-table">
-            <div className="content-table-header">
-              <span>Title</span>
-              <span>Type</span>
-              <span>Status</span>
-              <span>Created</span>
-              <span></span>
-            </div>
-
-            {filteredContents.map((item) => (
-              <div
-                className="content-table-row"
-                key={item._id}
-              >
-                <div className="content-title">
-                  <FileText size={17} />
-                  <div>
-                    <strong>{item.title}</strong>
-                    <small>{item.slug}</small>
-                  </div>
-                </div>
-
-                <div className="content-type">
-                  {item.type === "post" ? (
-                    <>
-                      <FileText size={15} />
-                      Post
-                    </>
-                  ) : (
-                    <>
-                      <Globe size={15} />
-                      Page
-                    </>
-                  )}
-                </div>
-
-                <div>
-                  <span
-                    className={`status-badge ${item.status}`}
-                  >
-                    {item.status}
-                  </span>
-                </div>
-
-                <div className="content-date">
-                  {new Date(
-                    item.createdAt
-                  ).toLocaleDateString()}
-                </div>
-
-                <div className="action-menu-container">
-                  <button
-                    className="content-more"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenMenuId(
-                        openMenuId === item._id ? null : item._id
-                      );
-                    }}
-                    title="Actions"
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-
-                  {openMenuId === item._id && (
-                    <div
-                      className="content-action-dropdown"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        className="action-dropdown-item"
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          if (item.type === "page") {
-                            navigate(`/content/edit-page/${item._id}`);
-                          } else {
-                            navigate(`/content/edit/${item._id}`);
-                          }
-                        }}
-                      >
-                        <Pencil size={15} />
-                        <span>Edit</span>
-                      </button>
-
-                      <button
-                        className="action-dropdown-item delete-item"
-                        onClick={() => handleDelete(item._id, item.title)}
-                      >
-                        <Trash2 size={15} />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+        {/* Content Table */}
+        <div className="content-table-card">
+          {loading ? (
+            <div className="content-empty-state">
+              <div className="empty-icon-box">
+                <FileText size={28} />
               </div>
-            ))}
-          </div>
-        )}
+              <h3>Loading content...</h3>
+            </div>
+          ) : filteredContents.length === 0 ? (
+            <div className="content-empty-state">
+              <div className="empty-icon-box">
+                <FileText size={28} />
+              </div>
+              <h3>No content found</h3>
+              <p>
+                {searchTerm
+                  ? `No posts or pages matched "${searchTerm}". Try a different keyword.`
+                  : "Get started by creating your first blog article or landing page."}
+              </p>
+              <button
+                type="button"
+                className="cms-btn-primary"
+                onClick={() => navigate("/content/create")}
+              >
+                <Plus size={16} />
+                <span>Create New Post</span>
+              </button>
+            </div>
+          ) : (
+            <table className="content-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "45%" }}>Title & Slug</th>
+                  <th style={{ width: "15%" }}>Type</th>
+                  <th style={{ width: "15%" }}>Status</th>
+                  <th style={{ width: "15%" }}>Created</th>
+                  <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredContents.map((item, index) => {
+                  const isMenuOpen = openMenuId === item._id;
+                  return (
+                    <tr key={item._id} className={isMenuOpen ? "menu-open" : ""}>
+                      <td>
+                        <div className="content-title-cell">
+                          <div className={`content-type-icon ${item.type}`}>
+                            {item.type === "page" ? (
+                              <Globe size={18} />
+                            ) : (
+                              <FileText size={18} />
+                            )}
+                          </div>
+                          <div className="content-title-info">
+                            <span
+                              className="content-item-name"
+                              onClick={() =>
+                                item.type === "page"
+                                  ? navigate(`/content/edit-page/${item._id}`)
+                                  : navigate(`/content/edit/${item._id}`)
+                              }
+                            >
+                              {item.title}
+                            </span>
+                            <span className="content-item-slug">/{item.slug}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className={`type-pill ${item.type}`}>
+                          {item.type === "page" ? "Page" : "Post"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className={`status-badge ${item.status}`}>
+                          {item.status}
+                        </span>
+                      </td>
+
+                      <td>
+                        {new Date(item.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+
+                      <td className={`action-cell ${isMenuOpen ? "menu-open" : ""}`}>
+                        <button
+                          type="button"
+                          className={`action-menu-trigger ${isMenuOpen ? "active" : ""}`}
+                          onClick={(e) => handleToggleMenu(e, item._id, index)}
+                          aria-label="Actions"
+                          aria-expanded={isMenuOpen}
+                          aria-haspopup="true"
+                        >
+                          <MoreVertical size={17} />
+                        </button>
+
+                        {isMenuOpen && (
+                          <div
+                            className={`action-popover-menu ${menuPlacement === "up" ? "open-up" : "open-down"
+                              }`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className="action-menu-item"
+                              onClick={() => {
+                                setOpenMenuId(null);
+                                if (item.type === "page") {
+                                  navigate(`/content/edit-page/${item._id}`);
+                                } else {
+                                  navigate(`/content/edit/${item._id}`);
+                                }
+                              }}
+                            >
+                              <Pencil size={14} />
+                              <span>Edit</span>
+                            </button>
+
+                            {item.type === "page" && (
+                              <button
+                                type="button"
+                                className="action-menu-item"
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  const pageUrl = item.slug === "home" || item.slug === "index" ? "/home" : `/${item.slug}`;
+                                  window.open(pageUrl, "_blank");
+                                }}
+                              >
+                                <ExternalLink size={14} />
+                                <span>View Public</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              className="action-menu-item delete"
+                              onClick={() => handleDelete(item._id, item.title)}
+                            >
+                              <Trash2 size={14} />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 }
-
-export default Content;

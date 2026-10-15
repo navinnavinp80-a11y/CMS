@@ -15,6 +15,8 @@ const mediaRoutes_1 = __importDefault(require("./routes/mediaRoutes"));
 const dashboardRoutes_1 = __importDefault(require("./routes/dashboardRoutes"));
 const visitRoutes_1 = __importDefault(require("./routes/visitRoutes"));
 const publicRoutes_1 = __importDefault(require("./routes/publicRoutes"));
+const storeRoutes_1 = __importDefault(require("./routes/storeRoutes"));
+const publicStoreRoutes_1 = __importDefault(require("./routes/publicStoreRoutes"));
 dns_1.default.setServers(["8.8.8.8", "1.1.1.1"]);
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -28,6 +30,8 @@ app.use("/api/public/content", publicRoutes_1.default);
 app.use("/api/media", mediaRoutes_1.default);
 app.use("/api/dashboard", dashboardRoutes_1.default);
 app.use("/api/visits", visitRoutes_1.default);
+app.use("/api/store", storeRoutes_1.default);
+app.use("/api/public/store", publicStoreRoutes_1.default);
 const PORT = process.env.PORT || 5000;
 app.get("/", (req, res) => {
     res.json({

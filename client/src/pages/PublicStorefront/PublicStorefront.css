@@ -1,0 +1,130 @@
+/* Public Storefront Page Styling */
+.public-storefront-wrapper {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.storefront-public-loading {
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #4b5563;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.storefront-spinner {
+  width: 42px;
+  height: 42px;
+  border: 3.5px solid #e5e7eb;
+  border-top-color: #111827;
+  border-radius: 50%;
+  animation: storeSpin 0.75s linear infinite;
+}
+
+@keyframes storeSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.storefront-public-fallback {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f8fafc;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.fallback-card {
+  max-width: 520px;
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 44px 32px;
+  text-align: center;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.07);
+}
+
+.fallback-icon {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+}
+
+.fallback-icon.error {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.fallback-card h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 12px;
+}
+
+.fallback-card p {
+  color: #64748b;
+  font-size: 14.5px;
+  line-height: 1.6;
+  margin: 0 0 28px;
+}
+
+.fallback-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.fallback-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.fallback-primary-btn:hover {
+  opacity: 0.9;
+}
+
+.fallback-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+
+.fallback-secondary-btn:hover {
+  background: #e2e8f0;
+}

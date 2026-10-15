@@ -1,6 +1,84 @@
 import { Request, Response } from "express";
 import Content from "../models/Content";
 
+export const RESERVED_SLUGS = new Set([
+  "login",
+  "signup",
+  "dashboard",
+  "content",
+  "media",
+  "users",
+  "analytics",
+  "settings",
+  "stores",
+  "store-editor",
+  "store",
+  "api",
+  "p",
+]);
+
+/**
+ * Sanitize raw string into a clean URL slug.
+ * Spaces and underscores -> hyphens.
+ * Removes non-alphanumeric/hyphen characters.
+ * Trims leading/trailing hyphens.
+ */
+export const sanitizeSlug = (raw: string): string => {
+  const trimmed = String(raw || "").trim().toLowerCase();
+  if (trimmed === "" || trimmed === "home" || trimmed === "index" || trimmed === "/") {
+    return "home";
+  }
+  return trimmed
+    .replace(/^[/#]+/, "")
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
+/**
+ * Resolves a safe, collision-free, non-reserved slug.
+ * If collision occurs with another document, appends sequential numeric suffix (-1, -2...).
+ */
+export const resolveUniqueSlug = async (
+  rawSlug: string,
+  excludeId?: string
+): Promise<string> => {
+  let base = sanitizeSlug(rawSlug);
+  if (!base) {
+    base = `page-${Date.now()}`;
+  }
+
+  // Prevent shadowing system admin routes
+  if (RESERVED_SLUGS.has(base)) {
+    base = `${base}-page`;
+  }
+
+  const query: Record<string, any> = { slug: base };
+  if (excludeId) {
+    query._id = { $ne: excludeId };
+  }
+  const existing = await Content.findOne(query);
+
+  if (!existing) {
+    return base;
+  }
+
+  let index = 1;
+  while (true) {
+    const candidate = `${base}-${index}`;
+    const checkQuery: Record<string, any> = { slug: candidate };
+    if (excludeId) {
+      checkQuery._id = { $ne: excludeId };
+    }
+    const check = await Content.findOne(checkQuery);
+    if (!check) {
+      return candidate;
+    }
+    index++;
+  }
+};
+
 export const createContent = async (
   req: Request,
   res: Response
@@ -8,25 +86,18 @@ export const createContent = async (
   try {
     const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
 
-    if (!title || !slug || !content || !type) {
+    if (!title || !content || !type) {
       res.status(400).json({
-        message: "Title, slug and content are required",
+        message: "Title, content and type are required",
       });
       return;
     }
 
-    const existingContent = await Content.findOne({ slug });
-
-    if (existingContent) {
-      res.status(400).json({
-        message: "Slug already exists",
-      });
-      return;
-    }
+    const safeSlug = await resolveUniqueSlug(slug || title);
 
     const newContent = await Content.create({
       title,
-      slug,
+      slug: safeSlug,
       content,
       type,
       status: status || "draft",
@@ -54,7 +125,12 @@ export const getAllContent = async (
   res: Response
 ): Promise<void> => {
   try {
-    const contents = await Content.find()
+    const filter: Record<string, any> = {};
+    if (req.query.type) {
+      filter.type = req.query.type;
+    }
+
+    const contents = await Content.find(filter)
       .populate("author", "name email role")
       .sort({ createdAt: -1 });
 
@@ -118,22 +194,13 @@ export const updateContent = async (
       return;
     }
 
-    if (slug && slug !== existingContent.slug) {
-      const slugExists = await Content.findOne({
-        slug,
-        _id: { $ne: id },
-      });
-
-      if (slugExists) {
-        res.status(400).json({
-          message: "Slug already exists",
-        });
-        return;
-      }
+    const idParam = Array.isArray(id) ? id[0] : String(id);
+    if (slug !== undefined) {
+      const safeSlug = await resolveUniqueSlug(slug || title || existingContent.title, idParam);
+      existingContent.slug = safeSlug;
     }
 
     existingContent.title = title ?? existingContent.title;
-    existingContent.slug = slug ?? existingContent.slug;
     existingContent.content = content ?? existingContent.content;
     existingContent.type = type ?? existingContent.type;
     existingContent.status = status ?? existingContent.status;
@@ -190,17 +257,60 @@ export const deleteContent = async (
   }
 };
 
+/**
+ * Public route to fetch published content by slug.
+ * If slug is empty, "home", "index", or "root", returns the designated Home page.
+ * Returns 404 for draft pages or non-existent content.
+ */
 export const getPublicContentBySlug = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
-    const { slug } = req.params;
+    let slug = req.params.slug ? String(req.params.slug).trim().toLowerCase() : "";
 
-    const content = await Content.findOne({
-      slug,
-      status: "published",
-    }).populate("author", "name email");
+    let content = null;
+
+    if (!slug || slug === "home" || slug === "index" || slug === "root") {
+      // 1. Look for published page with slug 'home' or 'index'
+      content = await Content.findOne({
+        status: "published",
+        type: "page",
+        slug: { $in: ["home", "index"] },
+      }).populate("author", "name email");
+
+      // 2. Fallback: look for published page with title 'Home' (case-insensitive)
+      if (!content) {
+        content = await Content.findOne({
+          status: "published",
+          type: "page",
+          title: { $regex: /^home$/i },
+        }).populate("author", "name email");
+      }
+
+      // 3. Fallback: look for any published content with slug 'home'
+      if (!content) {
+        content = await Content.findOne({
+          status: "published",
+          slug: "home",
+        }).populate("author", "name email");
+      }
+
+      // 4. Fallback: first published page of type 'page'
+      if (!content) {
+        content = await Content.findOne({
+          status: "published",
+          type: "page",
+        })
+          .sort({ createdAt: 1 })
+          .populate("author", "name email");
+      }
+    } else {
+      content = await Content.findOne({
+        slug,
+        status: "published",
+      }).populate("author", "name email");
+    }
 
     if (!content) {
       res.status(404).json({
@@ -215,6 +325,34 @@ export const getPublicContentBySlug = async (
     });
   } catch (error) {
     console.error("Get public content error:", error);
+
+    res.status(500).json({
+      message: "Server error",
+    });
+  }
+};
+
+/**
+ * Public route to fetch published pages list for navbar menus and links.
+ */
+export const getPublicPagesList = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const pages = await Content.find({
+      type: "page",
+      status: "published",
+    })
+      .select("_id title slug status metaTitle metaDescription createdAt")
+      .sort({ createdAt: 1 });
+
+    res.status(200).json({
+      message: "Published pages fetched successfully",
+      pages,
+    });
+  } catch (error) {
+    console.error("Get public pages list error:", error);
 
     res.status(500).json({
       message: "Server error",

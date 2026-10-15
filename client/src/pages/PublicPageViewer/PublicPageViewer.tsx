@@ -29,7 +29,11 @@ interface PageData {
   metaDescription?: string;
 }
 
-export default function PublicPageViewer() {
+interface PublicPageViewerProps {
+  isHome?: boolean;
+}
+
+export default function PublicPageViewer({ isHome = false }: PublicPageViewerProps) {
   const { slug } = useParams<{ slug: string }>();
   const [page, setPage] = useState<PageData | null>(null);
   const [components, setComponents] = useState<PageComponent[]>([]);
@@ -37,16 +41,17 @@ export default function PublicPageViewer() {
   const [error, setError] = useState("");
   const [notFound, setNotFound] = useState(false);
 
-  useEffect(() => {
-    if (!slug) return;
+  // When isHome is true or slug is empty/home/index, target "home"
+  const targetSlug = isHome ? "home" : (slug || "home");
 
+  useEffect(() => {
     const fetchPublicPage = async () => {
       try {
         setLoading(true);
         setError("");
         setNotFound(false);
 
-        const response = await fetch(`${API_URL}/public/content/${slug}`);
+        const response = await fetch(`${API_URL}/public/content/${encodeURIComponent(targetSlug)}`);
         const data = await response.json();
 
         if (response.status === 404) {
@@ -98,7 +103,7 @@ export default function PublicPageViewer() {
     };
 
     fetchPublicPage();
-  }, [slug]);
+  }, [targetSlug]);
 
   if (loading) {
     return (
@@ -115,8 +120,34 @@ export default function PublicPageViewer() {
         <div className="error-card">
           <h1>404</h1>
           <h2>Page Not Found</h2>
-          <p>The page you are looking for does not exist or has not been published yet.</p>
-          <Link to="/" className="error-back-btn">Go to Home</Link>
+          <p>
+            {isHome
+              ? "No published Home page has been set up yet. Please create and publish a Home page in the CMS."
+              : "The page you are looking for does not exist or has not been published yet."}
+          </p>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: "20px", flexWrap: "wrap" }}>
+            {!isHome && (
+              <Link to="/" className="error-back-btn">
+                Go to Home
+              </Link>
+            )}
+            <Link
+              to="/dashboard"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "10px 20px",
+                backgroundColor: "#2563EB",
+                color: "#ffffff",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: 600,
+                fontSize: "14px",
+              }}
+            >
+              CMS Dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -128,7 +159,27 @@ export default function PublicPageViewer() {
         <div className="error-card">
           <h2>Unable to Display Page</h2>
           <p>{error || "An unexpected error occurred."}</p>
-          <Link to="/" className="error-back-btn">Go to Home</Link>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: "20px" }}>
+            <Link to="/" className="error-back-btn">
+              Go to Home
+            </Link>
+            <Link
+              to="/dashboard"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "10px 20px",
+                backgroundColor: "#2563EB",
+                color: "#ffffff",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: 600,
+                fontSize: "14px",
+              }}
+            >
+              Dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );

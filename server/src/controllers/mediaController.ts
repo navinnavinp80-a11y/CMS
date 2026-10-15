@@ -18,8 +18,8 @@ export const uploadMedia = async (
     const fileType = req.file.mimetype.startsWith("image/")
       ? "image"
       : req.file.mimetype.startsWith("video/")
-      ? "video"
-      : null;
+        ? "video"
+        : null;
 
     if (!fileType) {
       res.status(400).json({

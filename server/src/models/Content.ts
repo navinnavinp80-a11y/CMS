@@ -10,6 +10,7 @@ export interface IContent extends Document {
   metaTitle?: string;
   metaDescription?: string;
   author: mongoose.Types.ObjectId;
+  website?: mongoose.Types.ObjectId;
 }
 
 const contentSchema = new Schema<IContent>(
@@ -23,7 +24,7 @@ const contentSchema = new Schema<IContent>(
     slug: {
       type: String,
       required: true,
-      unique: true,
+      // unique: true,
       trim: true,
     },
 
@@ -66,6 +67,13 @@ const contentSchema = new Schema<IContent>(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+
+    website: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Website",
+      required: false,
+      index: true,
     },
   },
   {

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Upload,
   Image as ImageIcon,
+  Video,
   Trash2,
   X,
+  FileCheck,
 } from "lucide-react";
+import AdminLayout from "../../components/Layout/AdminLayout";
 import "./Media.css";
 
 interface MediaItem {
@@ -19,14 +21,12 @@ interface MediaItem {
 
 const API_URL = "http://localhost:5000";
 
-function Media() {
-  const navigate = useNavigate();
+export default function Media() {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [previewImage, setPreviewImage] =
-    useState<MediaItem | null>(null);
+  const [previewImage, setPreviewImage] = useState<MediaItem | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -38,37 +38,30 @@ function Media() {
     try {
       setLoading(true);
       setError("");
-
       const token = localStorage.getItem("token");
 
-      const response = await fetch(
-        `${API_URL}/api/media`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/api/media`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to fetch media"
-        );
+        if (response.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          window.location.href = "/login";
+          return;
+        }
+        throw new Error(data.message || "Failed to fetch media");
       }
 
       const media = data.media || data;
-
-      setMediaItems(media);
-    } catch (error) {
-      console.error("Fetch media error:", error);
-
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load media"
-      );
+      setMediaItems(Array.isArray(media) ? media : []);
+    } catch (err: any) {
+      console.error("Fetch media error:", err);
+      setError(err instanceof Error ? err.message : "Failed to load media");
     } finally {
       setLoading(false);
     }
@@ -78,54 +71,36 @@ function Media() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-
     if (!file) return;
 
     try {
       setUploading(true);
       setError("");
-
       const token = localStorage.getItem("token");
-
       const formData = new FormData();
-
       formData.append("file", file);
 
-      const response = await fetch(
-        `${API_URL}/api/media/upload`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const response = await fetch(`${API_URL}/api/media/upload`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
       const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to upload file"
-        );
+        throw new Error(data.message || "Failed to upload file");
       }
 
       await fetchMedia();
-    } catch (error) {
-      console.error("Upload media error:", error);
-
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to upload media"
-      );
+    } catch (err: any) {
+      console.error("Upload media error:", err);
+      setError(err instanceof Error ? err.message : "Failed to upload media");
     } finally {
       setUploading(false);
-
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -133,295 +108,206 @@ function Media() {
   };
 
   const handleDelete = async (id: string) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this media?"
-    );
-
+    const confirmDelete = window.confirm("Are you sure you want to delete this media item?");
     if (!confirmDelete) return;
 
     try {
       const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        `${API_URL}/api/media/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/api/media/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to delete media"
-        );
+        throw new Error(data.message || "Failed to delete media");
       }
 
-      setMediaItems((previous) =>
-        previous.filter(
-          (item) => item._id !== id
-        )
-      );
-
+      setMediaItems((prev) => prev.filter((item) => item._id !== id));
       if (previewImage?._id === id) {
         setPreviewImage(null);
       }
-    } catch (error) {
-      console.error("Delete media error:", error);
-
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to delete media"
-      );
+    } catch (err: any) {
+      console.error("Delete media error:", err);
+      setError(err instanceof Error ? err.message : "Failed to delete media");
     }
   };
 
+  const imagesCount = mediaItems.filter((m) => m.type === "image").length;
+  const videosCount = mediaItems.filter((m) => m.type === "video").length;
+
   return (
-    <div className="media-page">
-
-      {/* Header */}
-      <div className="media-header">
-
-        <div>
-          <button
-            type="button"
-            className="media-back-to-dashboard"
-            onClick={() => navigate("/dashboard")}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#4f46e5",
-              cursor: "pointer",
-              fontSize: "13px",
-              fontWeight: 600,
-              padding: 0,
-              marginBottom: "6px",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-          <h1>Media Library</h1>
-
-          <p>
-            Upload and manage your images and media files.
-          </p>
-        </div>
-
-        <div className="media-header-actions">
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            onChange={handleFileChange}
-            hidden
-          />
-
-          <button
-            className="upload-media-button"
-            onClick={handleUploadClick}
-            disabled={uploading}
-          >
-            <Upload size={17} />
-
-            {uploading
-              ? "Uploading..."
-              : "Upload Media"}
-          </button>
-
-        </div>
-
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="media-error">
-          {error}
-        </div>
-      )}
-
-      {/* Stats */}
-      <div className="media-summary">
-
-        <div className="media-summary-card">
-
-          <div className="media-summary-icon">
-            <ImageIcon size={19} />
+    <AdminLayout>
+      <div className="media-page-wrapper">
+        {/* Header */}
+        <div className="media-page-header">
+          <div className="media-title-group">
+            <h1>Media Library</h1>
+            <p>Upload, organize, and manage your imagery and video assets.</p>
           </div>
 
           <div>
-            <span>Total Media</span>
-            <strong>{mediaItems.length}</strong>
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* Media Content */}
-      <div className="media-content-card">
-
-        <div className="media-content-header">
-
-          <div>
-            <h2>All Media</h2>
-
-            <p>
-              Your uploaded images and videos.
-            </p>
-          </div>
-
-        </div>
-
-        {loading ? (
-          <div className="media-page-empty">
-            Loading media...
-          </div>
-        ) : mediaItems.length === 0 ? (
-          <div className="media-page-empty">
-
-            <div className="empty-media-icon">
-              <ImageIcon size={34} />
-            </div>
-
-            <h3>No media yet</h3>
-
-            <p>
-              Upload your first image or video to
-              get started.
-            </p>
-
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileChange}
+              hidden
+            />
             <button
-              className="empty-upload-button"
+              type="button"
+              className="cms-btn-primary"
               onClick={handleUploadClick}
+              disabled={uploading}
             >
               <Upload size={16} />
-              Upload Media
+              <span>{uploading ? "Uploading..." : "Upload Media"}</span>
             </button>
-
           </div>
-        ) : (
-          <div className="media-grid-page">
+        </div>
 
-            {mediaItems.map((media) => {
+        {error && <div className="content-error-banner">{error}</div>}
 
-              const mediaUrl =
-                `${API_URL}${media.url}`;
+        {/* 3 Metric Summary Cards */}
+        <div className="media-metrics-grid">
+          <div className="media-metric-card">
+            <div className="media-metric-icon blue">
+              <FileCheck size={20} />
+            </div>
+            <div className="media-metric-info">
+              <span className="media-metric-label">Total Files</span>
+              <span className="media-metric-val">{mediaItems.length}</span>
+            </div>
+          </div>
 
-              return (
-                <div
-                  className="media-card"
-                  key={media._id}
-                >
+          <div className="media-metric-card">
+            <div className="media-metric-icon purple">
+              <ImageIcon size={20} />
+            </div>
+            <div className="media-metric-info">
+              <span className="media-metric-label">Images</span>
+              <span className="media-metric-val">{imagesCount}</span>
+            </div>
+          </div>
 
-                  <button
-                    className="media-preview"
-                    onClick={() =>
-                      media.type === "image" &&
-                      setPreviewImage(media)
-                    }
-                  >
-                    {media.type === "image" ? (
-                      <img
-                        src={mediaUrl}
-                        alt={media.originalName}
-                      />
-                    ) : (
-                      <video
-                        src={mediaUrl}
-                        muted
-                      />
-                    )}
-                  </button>
+          <div className="media-metric-card">
+            <div className="media-metric-icon green">
+              <Video size={20} />
+            </div>
+            <div className="media-metric-info">
+              <span className="media-metric-label">Videos</span>
+              <span className="media-metric-val">{videosCount}</span>
+            </div>
+          </div>
+        </div>
 
-                  <div className="media-card-info">
+        {/* Media Container Card */}
+        <div className="media-container-card">
+          <div className="media-card-topbar">
+            <h2 className="media-card-title">All Assets ({mediaItems.length})</h2>
+          </div>
 
-                    <div className="media-file-name">
-                      {media.originalName}
+          {loading ? (
+            <div className="content-empty-state">
+              <div className="empty-icon-box">
+                <ImageIcon size={28} />
+              </div>
+              <h3>Loading media...</h3>
+            </div>
+          ) : mediaItems.length === 0 ? (
+            <div className="content-empty-state">
+              <div className="empty-icon-box">
+                <ImageIcon size={28} />
+              </div>
+              <h3>No media files yet</h3>
+              <p>Upload high-resolution images or videos to use them in your blog posts and page sections.</p>
+              <button
+                type="button"
+                className="cms-btn-primary"
+                onClick={handleUploadClick}
+              >
+                <Upload size={16} />
+                <span>Upload Media</span>
+              </button>
+            </div>
+          ) : (
+            <div className="media-items-grid">
+              {mediaItems.map((media) => {
+                const mediaUrl = `${API_URL}${media.url}`;
+                return (
+                  <div className="media-item-box" key={media._id}>
+                    <button
+                      type="button"
+                      className="media-thumbnail-btn"
+                      onClick={() =>
+                        media.type === "image" && setPreviewImage(media)
+                      }
+                      title="Preview Media"
+                    >
+                      {media.type === "image" ? (
+                        <img src={mediaUrl} alt={media.originalName} />
+                      ) : (
+                        <video src={mediaUrl} muted />
+                      )}
+                    </button>
+
+                    <div className="media-item-meta">
+                      <div className="media-meta-text">
+                        <span className="media-filename" title={media.originalName}>
+                          {media.originalName}
+                        </span>
+                        <span className="media-type-tag">{media.type}</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="media-delete-btn"
+                        title="Delete Asset"
+                        onClick={() => handleDelete(media._id)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-
-                    <div className="media-file-type">
-                      {media.type}
-                    </div>
-
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-                  <button
-                    className="delete-media-button"
-                    title="Delete media"
-                    onClick={() =>
-                      handleDelete(media._id)
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </button>
-
-                </div>
-              );
-            })}
-
-          </div>
-        )}
-
-      </div>
-
-      {/* Image Preview Modal */}
-      {previewImage && (
-        <div
-          className="image-preview-overlay"
-          onClick={() =>
-            setPreviewImage(null)
-          }
-        >
-
+        {/* Modal */}
+        {previewImage && (
           <div
-            className="image-preview-modal"
-            onClick={(e) =>
-              e.stopPropagation()
-            }
+            className="image-preview-overlay"
+            onClick={() => setPreviewImage(null)}
           >
-
-            <div className="image-preview-header">
-
-              <div>
-                <h2>
-                  {previewImage.originalName}
-                </h2>
+            <div
+              className="image-preview-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="image-preview-header">
+                <h2>{previewImage.originalName}</h2>
+                <button
+                  type="button"
+                  className="image-preview-close"
+                  onClick={() => setPreviewImage(null)}
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <button
-                onClick={() =>
-                  setPreviewImage(null)
-                }
-              >
-                <X size={19} />
-              </button>
-
+              <div className="image-preview-body">
+                <img
+                  src={`${API_URL}${previewImage.url}`}
+                  alt={previewImage.originalName}
+                />
+              </div>
             </div>
-
-            <div className="image-preview-body">
-
-              <img
-                src={`${API_URL}${previewImage.url}`}
-                alt={previewImage.originalName}
-              />
-
-            </div>
-
           </div>
-
-        </div>
-      )}
-
-    </div>
+        )}
+      </div>
+    </AdminLayout>
   );
 }
-
-export default Media;

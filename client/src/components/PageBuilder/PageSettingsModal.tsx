@@ -11,9 +11,12 @@ import {
 import "./PageSettingsModal.css";
 
 export const generateSlug = (text: string): string => {
-  return text
+  const trimmed = text.trim();
+  if (trimmed.toLowerCase() === "home" || trimmed.toLowerCase() === "index") {
+    return "home";
+  }
+  return trimmed
     .toLowerCase()
-    .trim()
     .replace(/[^\w\s-]/g, "")
     .replace(/[\s_]+/g, "-")
     .replace(/-+/g, "-")
@@ -71,6 +74,10 @@ export const PageSettingsModal: React.FC<PageSettingsModalProps> = ({
 
   const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawVal = e.target.value;
+    if (!rawVal.trim() && title.toLowerCase() === "home") {
+      onUpdateSlug("home", true);
+      return;
+    }
     const normalized = rawVal
       .toLowerCase()
       .replace(/\s+/g, "-")
@@ -79,7 +86,7 @@ export const PageSettingsModal: React.FC<PageSettingsModalProps> = ({
   };
 
   const handleSlugBlur = () => {
-    if (slug) {
+    if (slug && slug !== "home") {
       onUpdateSlug(generateSlug(slug), true);
     }
   };
@@ -174,27 +181,30 @@ export const PageSettingsModal: React.FC<PageSettingsModalProps> = ({
               {/* URL Slug */}
               <div className="form-group">
                 <label htmlFor="settings-page-slug">
-                  URL Slug <span className="required">*</span>
+                  URL Route / Slug <span className="required">*</span>
                 </label>
                 <div className="slug-input-wrapper">
-                  <span className="slug-prefix">http://localhost:5000/</span>
+                  <span className="slug-prefix">{window.location.origin}/</span>
                   <input
                     id="settings-page-slug"
                     type="text"
-                    placeholder="about-our-company"
-                    value={slug}
+                    placeholder={slug === "home" ? "" : "about-us"}
+                    value={slug === "home" ? "" : slug}
                     onChange={handleSlugChange}
                     onBlur={handleSlugBlur}
                   />
                 </div>
-                {!slug.trim() && (
-                  <span className="field-error">
-                    Slug cannot be empty. A valid slug will be auto-generated on save if left empty.
+                {slug === "home" ? (
+                  <span className="field-hint" style={{ color: "#2563EB", fontWeight: 500 }}>
+                    Designated Home Page — accessible directly at root URL: <code>{window.location.origin}/</code>
                   </span>
-                )}
-                {slug.trim() && (
+                ) : !slug.trim() ? (
+                  <span className="field-error">
+                    Slug cannot be empty. A valid slug will be auto-generated from page title.
+                  </span>
+                ) : (
                   <span className="field-hint">
-                    Unique URL path for this page. Only lowercase letters, numbers, and hyphens.
+                    Public URL: <code>{window.location.origin}/{slug}</code>
                   </span>
                 )}
               </div>
@@ -340,8 +350,8 @@ export const PageSettingsModal: React.FC<PageSettingsModalProps> = ({
                     <div className="google-url-details">
                       <span className="google-site-name">Your Website</span>
                       <span className="google-url">
-                        http://localhost:5000/
-                        {slug ? slug.replace(/^\/+/, "") : "your-page-slug"}
+                        {window.location.origin}/
+                        {slug === "home" || slug === "index" ? "" : slug ? slug.replace(/^\/+/, "") : "your-page-slug"}
                       </span>
                     </div>
                   </div>

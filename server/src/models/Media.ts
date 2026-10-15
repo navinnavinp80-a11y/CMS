@@ -6,6 +6,7 @@ export interface IMedia extends Document {
   url: string;
   type: "image" | "video";
   uploadedBy: mongoose.Types.ObjectId;
+  website?: mongoose.Types.ObjectId;
 }
 
 const mediaSchema = new Schema<IMedia>(
@@ -31,11 +32,18 @@ const mediaSchema = new Schema<IMedia>(
       required: true,
     },
 
+    website: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Website",
+      index: true,
+    },
+
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
   },
   {
     timestamps: true,

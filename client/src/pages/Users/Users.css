@@ -1,0 +1,150 @@
+.users-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.users-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.users-title-group h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cms-text-main);
+  margin: 0 0 4px;
+}
+
+.users-title-group p {
+  font-size: 13.5px;
+  color: var(--cms-text-muted);
+  margin: 0;
+}
+
+.user-avatar-cell {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.user-role-badge {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: var(--cms-radius-xs);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.user-role-badge.admin {
+  background: #EFF6FF;
+  color: #2563EB;
+}
+
+.user-role-badge.editor {
+  background: #F5F3FF;
+  color: #8B5CF6;
+}
+
+.user-role-badge.author {
+  background: #ECFDF5;
+  color: #10B981;
+}
+
+/* Add User Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #FFFFFF;
+  border-radius: var(--cms-radius-lg);
+  max-width: 480px;
+  width: 100%;
+  box-shadow: var(--cms-shadow-dropdown);
+  padding: 24px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cms-text-main);
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--cms-text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cms-text-main);
+}
+
+.form-group input,
+.form-group select {
+  height: 40px;
+  border: 1px solid var(--cms-border);
+  border-radius: var(--cms-radius-md);
+  padding: 0 14px;
+  font-size: 13.5px;
+  outline: none;
+  transition: var(--cms-transition);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--cms-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}

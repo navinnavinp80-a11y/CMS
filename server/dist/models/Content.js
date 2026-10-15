@@ -43,7 +43,7 @@ const contentSchema = new mongoose_1.Schema({
     slug: {
         type: String,
         required: true,
-        unique: true,
+        // unique: true,
         trim: true,
     },
     content: {
@@ -79,6 +79,12 @@ const contentSchema = new mongoose_1.Schema({
         type: mongoose_1.default.Schema.Types.ObjectId,
         ref: "User",
         required: true,
+    },
+    website: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "Website",
+        required: false,
+        index: true,
     },
 }, {
     timestamps: true,

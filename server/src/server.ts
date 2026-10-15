@@ -10,6 +10,8 @@ import mediaRoutes from "./routes/mediaRoutes";
 import dashboardRoutes from "./routes/dashboardRoutes";
 import visitRoutes from "./routes/visitRoutes";
 import publicRoutes from "./routes/publicRoutes";
+import storeRoutes from "./routes/storeRoutes";
+import publicStoreRoutes from "./routes/publicStoreRoutes";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
@@ -27,6 +29,8 @@ app.use("/api/public/content", publicRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/visits", visitRoutes);
+app.use("/api/store", storeRoutes);
+app.use("/api/public/store", publicStoreRoutes);
 
 const PORT = process.env.PORT || 5000;
 
