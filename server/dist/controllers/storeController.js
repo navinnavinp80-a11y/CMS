@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.publishStoreConfig = exports.saveDraftStoreConfig = exports.getStoreConfig = exports.getPublicStoreConfig = exports.getPublicStoreConfigBySlug = exports.publishStore = exports.deleteStore = exports.updateStore = exports.getStoreById = exports.createStore = exports.getStores = exports.normalizeSlug = exports.getDefaultSections = exports.getDefaultTheme = void 0;
 const StoreConfig_1 = __importDefault(require("../models/StoreConfig"));
+const entitlementService_1 = require("../services/entitlementService");
 const getDefaultTheme = () => ({
     primaryColor: "#202223",
     secondaryColor: "#4f46e5",
@@ -168,6 +169,18 @@ const createStore = async (req, res) => {
         const userId = req.user?.id;
         if (!userId) {
             res.status(401).json({ message: "Unauthorized" });
+            return;
+        }
+        // Entitlement check
+        const entitlement = await (0, entitlementService_1.canUserCreateStore)(userId);
+        if (!entitlement.allowed) {
+            res.status(403).json({
+                message: entitlement.reason ||
+                    "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+                limitReached: true,
+                currentCount: entitlement.currentCount,
+                maxAllowed: entitlement.maxAllowed,
+            });
             return;
         }
         const { storeName, name, slug } = req.body;
@@ -522,6 +535,16 @@ const getStoreConfig = async (req, res) => {
         }
         let config = await StoreConfig_1.default.findOne({ owner: userId }).sort({ updatedAt: -1 });
         if (!config) {
+            const entitlement = await (0, entitlementService_1.canUserCreateStore)(userId);
+            if (!entitlement.allowed) {
+                res.status(200).json({
+                    message: "No store configuration found. Creation limit reached on Free plan.",
+                    store: null,
+                    stores: [],
+                    limitReached: true,
+                });
+                return;
+            }
             const defaultName = "My Store";
             config = await StoreConfig_1.default.create({
                 owner: userId,
@@ -570,6 +593,17 @@ const saveDraftStoreConfig = async (req, res) => {
         const { storeName, name, sections, theme } = req.body;
         const finalName = (storeName || name || "My Store").trim();
         if (!config) {
+            const entitlement = await (0, entitlementService_1.canUserCreateStore)(userId);
+            if (!entitlement.allowed) {
+                res.status(403).json({
+                    message: entitlement.reason ||
+                        "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+                    limitReached: true,
+                    currentCount: entitlement.currentCount,
+                    maxAllowed: entitlement.maxAllowed,
+                });
+                return;
+            }
             config = new StoreConfig_1.default({
                 owner: userId,
                 storeName: finalName,
@@ -627,6 +661,17 @@ const publishStoreConfig = async (req, res) => {
         const { storeName, name, sections, theme } = req.body;
         const finalName = (storeName || name || "My Store").trim();
         if (!config) {
+            const entitlement = await (0, entitlementService_1.canUserCreateStore)(userId);
+            if (!entitlement.allowed) {
+                res.status(403).json({
+                    message: entitlement.reason ||
+                        "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+                    limitReached: true,
+                    currentCount: entitlement.currentCount,
+                    maxAllowed: entitlement.maxAllowed,
+                });
+                return;
+            }
             config = new StoreConfig_1.default({
                 owner: userId,
                 storeName: finalName,

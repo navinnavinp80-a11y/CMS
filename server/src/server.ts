@@ -12,6 +12,9 @@ import visitRoutes from "./routes/visitRoutes";
 import publicRoutes from "./routes/publicRoutes";
 import storeRoutes from "./routes/storeRoutes";
 import publicStoreRoutes from "./routes/publicStoreRoutes";
+import websiteRoutes from "./routes/websiteRoutes";
+import planRoutes from "./routes/planRoutes";
+import paymentRoutes from "./routes/paymentRoutes";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
@@ -31,6 +34,9 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/visits", visitRoutes);
 app.use("/api/store", storeRoutes);
 app.use("/api/public/store", publicStoreRoutes);
+app.use("/api/websites", websiteRoutes);
+app.use("/api/plan", planRoutes);
+app.use("/api/payments", paymentRoutes);
 
 const PORT = process.env.PORT || 5000;
 

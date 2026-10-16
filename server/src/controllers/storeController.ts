@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import StoreConfig, { IStoreConfig, IStoreSection, IStoreTheme } from "../models/StoreConfig";
+import { canUserCreate } from "../services/entitlementService";
 
 export const getDefaultTheme = (): IStoreTheme => ({
   primaryColor: "#202223",
@@ -174,6 +175,20 @@ export const createStore = async (
     const userId = req.user?.id;
     if (!userId) {
       res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+
+    // Entitlement check
+    const entitlement = await canUserCreate(userId);
+    if (!entitlement.allowed) {
+      res.status(403).json({
+        message:
+          entitlement.reason ||
+          "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+        limitReached: true,
+        currentCount: entitlement.currentCount,
+        maxAllowed: entitlement.maxAllowed,
+      });
       return;
     }
 
@@ -589,6 +604,17 @@ export const getStoreConfig = async (
     let config = await StoreConfig.findOne({ owner: userId }).sort({ updatedAt: -1 });
 
     if (!config) {
+      const entitlement = await canUserCreate(userId);
+      if (!entitlement.allowed) {
+        res.status(200).json({
+          message: "No store configuration found. Creation limit reached on Free plan.",
+          store: null,
+          stores: [],
+          limitReached: true,
+        });
+        return;
+      }
+
       const defaultName = "My Store";
       config = await StoreConfig.create({
         owner: userId,
@@ -643,6 +669,19 @@ export const saveDraftStoreConfig = async (
     const finalName = (storeName || name || "My Store").trim();
 
     if (!config) {
+      const entitlement = await canUserCreate(userId);
+      if (!entitlement.allowed) {
+        res.status(403).json({
+          message:
+            entitlement.reason ||
+            "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+          limitReached: true,
+          currentCount: entitlement.currentCount,
+          maxAllowed: entitlement.maxAllowed,
+        });
+        return;
+      }
+
       config = new StoreConfig({
         owner: userId,
         storeName: finalName,
@@ -704,6 +743,19 @@ export const publishStoreConfig = async (
     const finalName = (storeName || name || "My Store").trim();
 
     if (!config) {
+      const entitlement = await canUserCreate(userId);
+      if (!entitlement.allowed) {
+        res.status(403).json({
+          message:
+            entitlement.reason ||
+            "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+          limitReached: true,
+          currentCount: entitlement.currentCount,
+          maxAllowed: entitlement.maxAllowed,
+        });
+        return;
+      }
+
       config = new StoreConfig({
         owner: userId,
         storeName: finalName,

@@ -3,307 +3,289 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteWebsite = exports.updateWebsite = exports.createWebsite = exports.getWebsitePages = exports.getWebsiteById = exports.getMyWebsites = exports.ensureWebsiteAndAssociatePages = exports.sanitizeWebsiteSlug = void 0;
-const mongoose_1 = __importDefault(require("mongoose"));
+exports.getWebsitePages = exports.deleteWebsite = exports.updateWebsite = exports.getWebsiteById = exports.createWebsite = exports.getWebsites = exports.normalizeWebsiteSlug = void 0;
 const Website_1 = __importDefault(require("../models/Website"));
 const Content_1 = __importDefault(require("../models/Content"));
-/**
- * Sanitize a string into a clean URL slug for a website.
- */
-const sanitizeWebsiteSlug = (input) => {
-    return input
+const entitlementService_1 = require("../services/entitlementService");
+const normalizeWebsiteSlug = (slug) => {
+    return slug
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
 };
-exports.sanitizeWebsiteSlug = sanitizeWebsiteSlug;
+exports.normalizeWebsiteSlug = normalizeWebsiteSlug;
 /**
- * Helper: Ensures at least one website entry exists for the user and associates
- * any unassigned pages (Home, About, Contact) under this website.
+ * GET /api/websites
+ * Returns all websites belonging to the authenticated user (or all for admin).
+ * Supports optional ?search= query parameter.
  */
-const ensureWebsiteAndAssociatePages = async (userId) => {
-    let website = userId ? await Website_1.default.findOne({ owner: userId }) : null;
-    if (!website) {
-        website = await Website_1.default.findOne();
-    }
-    if (!website) {
-        let baseSlug = "my-website";
-        let candidateSlug = baseSlug;
-        let idx = 1;
-        while (await Website_1.default.findOne({ slug: candidateSlug })) {
-            candidateSlug = `${baseSlug}-${idx}`;
-            idx++;
-        }
-        website = await Website_1.default.create({
-            name: "My Website",
-            slug: candidateSlug,
-            description: "Primary website containing Home, About, Contact, and landing pages.",
-            owner: userId ? new mongoose_1.default.Types.ObjectId(userId) : undefined,
-            status: "published",
-        });
-    }
-    // Associate any pages with no website assigned
-    const unassignedPages = await Content_1.default.find({
-        type: "page",
-        $or: [{ website: { $exists: false } }, { website: null }],
-    });
-    if (unassignedPages.length > 0) {
-        for (const page of unassignedPages) {
-            page.website = website._id;
-            // If slug was an auto-generated placeholder like page-2 or page-3, normalize it to clean slug if possible
-            if (page.title.toLowerCase() === "about" && page.slug.startsWith("page-")) {
-                const slugTaken = await Content_1.default.findOne({ slug: "about", _id: { $ne: page._id } });
-                if (!slugTaken)
-                    page.slug = "about";
-            }
-            else if (page.title.toLowerCase() === "contact" && page.slug.startsWith("page-")) {
-                const slugTaken = await Content_1.default.findOne({ slug: "contact", _id: { $ne: page._id } });
-                if (!slugTaken)
-                    page.slug = "contact";
-            }
-            await page.save();
-        }
-    }
-    // Assign homepage if not designated yet
-    if (!website.homePage) {
-        const homePage = await Content_1.default.findOne({
-            website: website._id,
-            type: "page",
-            $or: [{ slug: "home" }, { title: { $regex: /^home$/i } }],
-        });
-        if (homePage) {
-            website.homePage = homePage._id;
-            await website.save();
-        }
-    }
-    return website;
-};
-exports.ensureWebsiteAndAssociatePages = ensureWebsiteAndAssociatePages;
-// 1. Get all websites for the current user
-const getMyWebsites = async (req, res) => {
+const getWebsites = async (req, res) => {
     try {
         const userId = req.user?.id;
         if (!userId) {
-            res.status(401).json({ message: "Unauthorized" });
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
             return;
         }
-        // Auto-initialize website and link any unassigned Home/About/Contact pages
-        await (0, exports.ensureWebsiteAndAssociatePages)(userId);
-        let websites = await Website_1.default.find(userId ? { $or: [{ owner: userId }, { owner: { $exists: false } }] } : {})
-            .populate("owner", "name email")
-            .populate("homePage", "title slug")
-            .sort({ createdAt: 1 });
+        const searchQuery = req.query.search;
+        const baseFilter = req.user?.role === "admin"
+            ? {}
+            : { $or: [{ owner: userId }, { owner: { $exists: false } }, { owner: null }] };
+        let filter = baseFilter;
+        if (searchQuery && searchQuery.trim() !== "") {
+            const regex = new RegExp(searchQuery.trim(), "i");
+            const searchConditions = [{ name: regex }, { slug: regex }, { description: regex }];
+            filter =
+                Object.keys(baseFilter).length > 0
+                    ? { $and: [baseFilter, { $or: searchConditions }] }
+                    : { $or: searchConditions };
+        }
+        let websites = await Website_1.default.find(filter)
+            .populate("owner", "name email role")
+            .populate("homePage", "title slug status")
+            .sort({ updatedAt: -1 });
+        // If no websites exist in database, provision default "My Website"
         if (websites.length === 0) {
-            websites = await Website_1.default.find()
-                .populate("owner", "name email")
-                .populate("homePage", "title slug")
-                .sort({ createdAt: 1 });
+            const existingHome = await Content_1.default.findOne({ slug: "home", type: "page" });
+            const defaultSite = await Website_1.default.create({
+                name: "My Website",
+                slug: "my-website",
+                description: "Primary website containing Home, About, Contact, and landing pages.",
+                owner: userId,
+                status: "published",
+                homePage: existingHome ? existingHome._id : undefined,
+            });
+            if (existingHome && !existingHome.website) {
+                existingHome.website = defaultSite._id;
+                await existingHome.save();
+            }
+            websites = [defaultSite];
         }
-        const siteIds = websites.map((w) => w._id);
-        // Aggregate page statistics for each website
-        const contentCounts = await Content_1.default.aggregate([
-            { $match: { website: { $in: siteIds } } },
-            {
-                $group: {
-                    _id: { website: "$website", status: "$status" },
-                    count: { $sum: 1 },
-                },
-            },
-        ]);
-        const countMap = {};
-        for (const item of contentCounts) {
-            const siteId = item._id.website.toString();
-            if (!countMap[siteId]) {
-                countMap[siteId] = { totalPages: 0, publishedPages: 0, draftPages: 0 };
-            }
-            countMap[siteId].totalPages += item.count;
-            if (item._id.status === "published") {
-                countMap[siteId].publishedPages += item.count;
-            }
-            else {
-                countMap[siteId].draftPages += item.count;
+        // Ensure every website has a homePage linked so frontend page editor can always open it
+        for (const site of websites) {
+            if (!site.homePage) {
+                let existingPage = await Content_1.default.findOne({
+                    website: site._id,
+                    type: "page",
+                });
+                if (!existingPage) {
+                    existingPage = await Content_1.default.create({
+                        title: `${site.name} Home`,
+                        slug: site.slug === "home" ? `home-${Date.now().toString().slice(-4)}` : site.slug,
+                        content: JSON.stringify([]),
+                        type: "page",
+                        status: site.status,
+                        author: userId,
+                        website: site._id,
+                    });
+                }
+                site.homePage = existingPage._id;
+                await site.save();
             }
         }
-        const websitesWithStats = websites.map((site) => {
-            const siteObj = site.toObject();
-            const stats = countMap[site._id.toString()] || {
-                totalPages: 0,
-                publishedPages: 0,
-                draftPages: 0,
-            };
-            return {
-                ...siteObj,
-                pageCount: stats.totalPages,
-                publishedPageCount: stats.publishedPages,
-                draftPageCount: stats.draftPages,
-            };
-        });
         res.status(200).json({
             message: "Websites fetched successfully",
-            websites: websitesWithStats,
+            websites,
+            website: websites[0] || null,
         });
     }
     catch (error) {
-        console.error("getMyWebsites error:", error);
+        console.error("Get websites error:", error);
         res.status(500).json({ message: "Server error fetching websites" });
     }
 };
-exports.getMyWebsites = getMyWebsites;
-// 2. Get single website by ID
-const getWebsiteById = async (req, res) => {
-    try {
-        const idParam = Array.isArray(req.params.id) ? req.params.id[0] : String(req.params.id);
-        if (!mongoose_1.default.Types.ObjectId.isValid(idParam)) {
-            res.status(400).json({ message: "Invalid website ID" });
-            return;
-        }
-        const website = await Website_1.default.findById(idParam)
-            .populate("owner", "name email")
-            .populate("homePage", "title slug");
-        if (!website) {
-            res.status(404).json({ message: "Website not found" });
-            return;
-        }
-        const pageCount = await Content_1.default.countDocuments({
-            website: website._id,
-            type: "page",
-        });
-        res.status(200).json({
-            message: "Website fetched successfully",
-            website: {
-                ...website.toObject(),
-                pageCount,
-            },
-        });
-    }
-    catch (error) {
-        console.error("getWebsiteById error:", error);
-        res.status(500).json({ message: "Server error fetching website" });
-    }
-};
-exports.getWebsiteById = getWebsiteById;
-// 3. Get all pages belonging to a specific website
-const getWebsitePages = async (req, res) => {
-    try {
-        const idParam = Array.isArray(req.params.id) ? req.params.id[0] : String(req.params.id);
-        if (!mongoose_1.default.Types.ObjectId.isValid(idParam)) {
-            res.status(400).json({ message: "Invalid website ID" });
-            return;
-        }
-        const website = await Website_1.default.findById(idParam);
-        if (!website) {
-            res.status(404).json({ message: "Website not found" });
-            return;
-        }
-        // Fetch pages sorted so Home comes first, then by creation date
-        const pages = await Content_1.default.find({
-            website: idParam,
-            type: "page",
-        })
-            .populate("author", "name email")
-            .sort({ createdAt: 1 });
-        // Custom sort: ensure home page is first
-        const sortedPages = [...pages].sort((a, b) => {
-            const aIsHome = a.slug === "home" || a.title.toLowerCase() === "home";
-            const bIsHome = b.slug === "home" || b.title.toLowerCase() === "home";
-            if (aIsHome && !bIsHome)
-                return -1;
-            if (!aIsHome && bIsHome)
-                return 1;
-            return 0;
-        });
-        res.status(200).json({
-            message: "Website pages fetched successfully",
-            pages: sortedPages,
-            website: {
-                _id: website._id,
-                name: website.name,
-                slug: website.slug,
-                status: website.status,
-            },
-        });
-    }
-    catch (error) {
-        console.error("getWebsitePages error:", error);
-        res.status(500).json({ message: "Server error fetching website pages" });
-    }
-};
-exports.getWebsitePages = getWebsitePages;
-// 4. Create a new Website
+exports.getWebsites = getWebsites;
+/**
+ * POST /api/websites
+ * Creates a new website for the authenticated user.
+ * Enforces Free/Premium entitlement limit.
+ */
 const createWebsite = async (req, res) => {
     try {
-        const { name, slug, description, status } = req.body;
         const userId = req.user?.id;
-        if (!name || !name.trim()) {
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
+            return;
+        }
+        // Entitlement verification: Free users get max 2 websites; starting from 3rd requires active Premium
+        const entitlement = await (0, entitlementService_1.canUserCreateWebsite)(userId);
+        if (!entitlement.allowed) {
+            res.status(403).json({
+                message: entitlement.reason ||
+                    "Free plan allows only 2 websites. Upgrade to Premium to create more websites.",
+                limitReached: true,
+                currentCount: entitlement.currentCount,
+                maxAllowed: entitlement.maxAllowed,
+                remaining: entitlement.remaining,
+            });
+            return;
+        }
+        const { name, slug, description, status, settings } = req.body;
+        const finalName = String(name || "").trim();
+        if (!finalName) {
             res.status(400).json({ message: "Website name is required" });
             return;
         }
-        let cleanSlug = (0, exports.sanitizeWebsiteSlug)(slug || name);
+        const cleanSlug = (0, exports.normalizeWebsiteSlug)(slug || finalName);
         if (!cleanSlug) {
-            cleanSlug = `website-${Date.now()}`;
+            res.status(400).json({
+                message: "Invalid slug format. Please use letters, numbers, and hyphens.",
+            });
+            return;
         }
-        // Ensure unique slug
-        let candidate = cleanSlug;
-        let idx = 1;
-        while (await Website_1.default.findOne({ slug: candidate })) {
-            candidate = `${cleanSlug}-${idx}`;
-            idx++;
+        // Check if slug is already taken
+        const slugExists = await Website_1.default.findOne({ slug: cleanSlug });
+        if (slugExists) {
+            res.status(400).json({
+                message: `The website URL / slug "${cleanSlug}" is already in use. Please choose another.`,
+            });
+            return;
         }
-        const website = await Website_1.default.create({
-            name: name.trim(),
-            slug: candidate,
-            description: description ? description.trim() : "",
-            owner: new mongoose_1.default.Types.ObjectId(userId),
+        const newWebsite = await Website_1.default.create({
+            name: finalName,
+            slug: cleanSlug,
+            description: description || "",
+            owner: userId,
             status: status === "published" ? "published" : "draft",
+            settings: settings || {},
         });
+        // Auto-create initial home page for the new website
+        const homePage = await Content_1.default.create({
+            title: `${finalName} Home`,
+            slug: cleanSlug === "home" ? `home-${Date.now().toString().slice(-4)}` : cleanSlug,
+            content: JSON.stringify([]),
+            type: "page",
+            status: status === "published" ? "published" : "draft",
+            author: userId,
+            website: newWebsite._id,
+        });
+        newWebsite.homePage = homePage._id;
+        await newWebsite.save();
         res.status(201).json({
             message: "Website created successfully",
-            website,
+            website: newWebsite,
         });
     }
     catch (error) {
-        console.error("createWebsite error:", error);
+        console.error("Create website error:", error);
+        if (error.code === 11000) {
+            res.status(400).json({ message: "A website with this slug already exists." });
+            return;
+        }
         res.status(500).json({ message: "Server error creating website" });
     }
 };
 exports.createWebsite = createWebsite;
-// 5. Update an existing Website
-const updateWebsite = async (req, res) => {
+/**
+ * GET /api/websites/:id
+ * Fetches a single website and its associated pages.
+ * Enforces owner/admin authorization.
+ */
+const getWebsiteById = async (req, res) => {
     try {
-        const idParam = Array.isArray(req.params.id) ? req.params.id[0] : String(req.params.id);
-        const { name, slug, description, status, homePage } = req.body;
-        if (!mongoose_1.default.Types.ObjectId.isValid(idParam)) {
-            res.status(400).json({ message: "Invalid website ID" });
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
             return;
         }
-        const website = await Website_1.default.findById(idParam);
+        const { id } = req.params;
+        const website = await Website_1.default.findById(id)
+            .populate("owner", "name email role")
+            .populate("homePage", "title slug status");
         if (!website) {
             res.status(404).json({ message: "Website not found" });
             return;
         }
+        const websiteOwnerId = website.owner?._id
+            ? website.owner._id.toString()
+            : website.owner?.toString();
+        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+            res.status(403).json({ message: "You are not authorized to access this website" });
+            return;
+        }
+        const pages = await Content_1.default.find({
+            website: website._id,
+            type: "page",
+        }).sort({ createdAt: 1 });
+        res.status(200).json({
+            message: "Website fetched successfully",
+            website,
+            pages,
+        });
+    }
+    catch (error) {
+        console.error("Get website by ID error:", error);
+        res.status(500).json({ message: "Server error fetching website" });
+    }
+};
+exports.getWebsiteById = getWebsiteById;
+/**
+ * PUT /api/websites/:id
+ * Updates an existing website.
+ * Enforces owner/admin authorization.
+ * Note: Editing does NOT consume creation allowance.
+ */
+const updateWebsite = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
+            return;
+        }
+        const { id } = req.params;
+        const website = await Website_1.default.findById(id);
+        if (!website) {
+            res.status(404).json({ message: "Website not found" });
+            return;
+        }
+        const websiteOwnerId = website.owner?._id
+            ? website.owner._id.toString()
+            : website.owner?.toString();
+        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+            res.status(403).json({ message: "You are not authorized to modify this website" });
+            return;
+        }
+        const { name, slug, description, status, homePage, settings } = req.body;
         if (slug) {
-            const cleanSlug = (0, exports.sanitizeWebsiteSlug)(slug);
+            const cleanSlug = (0, exports.normalizeWebsiteSlug)(slug);
+            if (!cleanSlug) {
+                res.status(400).json({ message: "Invalid slug format" });
+                return;
+            }
             if (cleanSlug !== website.slug) {
                 const slugExists = await Website_1.default.findOne({
                     slug: cleanSlug,
-                    _id: { $ne: idParam },
+                    _id: { $ne: id },
                 });
                 if (slugExists) {
-                    res.status(409).json({ message: `Slug '${cleanSlug}' is already taken.` });
+                    res.status(400).json({
+                        message: `The website URL / slug "${cleanSlug}" is already in use.`,
+                    });
                     return;
                 }
                 website.slug = cleanSlug;
             }
         }
-        if (name)
-            website.name = name.trim();
-        if (description !== undefined)
-            website.description = description.trim();
-        if (status)
+        if (name !== undefined) {
+            const trimmedName = String(name).trim();
+            if (trimmedName)
+                website.name = trimmedName;
+        }
+        if (description !== undefined) {
+            website.description = String(description).trim();
+        }
+        if (status !== undefined && (status === "draft" || status === "published")) {
             website.status = status;
-        if (homePage !== undefined)
+        }
+        if (homePage !== undefined) {
             website.homePage = homePage || undefined;
+        }
+        if (settings !== undefined) {
+            website.settings = {
+                ...website.settings,
+                ...settings,
+            };
+        }
         await website.save();
         res.status(200).json({
             message: "Website updated successfully",
@@ -311,34 +293,89 @@ const updateWebsite = async (req, res) => {
         });
     }
     catch (error) {
-        console.error("updateWebsite error:", error);
+        console.error("Update website error:", error);
+        if (error.code === 11000) {
+            res.status(400).json({ message: "A website with this slug already exists." });
+            return;
+        }
         res.status(500).json({ message: "Server error updating website" });
     }
 };
 exports.updateWebsite = updateWebsite;
-// 6. Delete a Website
+/**
+ * DELETE /api/websites/:id
+ * Permanently deletes a website.
+ * Enforces owner/admin authorization.
+ */
 const deleteWebsite = async (req, res) => {
     try {
-        const idParam = Array.isArray(req.params.id) ? req.params.id[0] : String(req.params.id);
-        if (!mongoose_1.default.Types.ObjectId.isValid(idParam)) {
-            res.status(400).json({ message: "Invalid website ID" });
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
             return;
         }
-        const website = await Website_1.default.findById(idParam);
+        const { id } = req.params;
+        const website = await Website_1.default.findById(id);
         if (!website) {
             res.status(404).json({ message: "Website not found" });
             return;
         }
-        // Cascade delete associated pages
-        const deleted = await Content_1.default.deleteMany({ website: idParam });
-        await Website_1.default.findByIdAndDelete(idParam);
+        const websiteOwnerId = website.owner?._id
+            ? website.owner._id.toString()
+            : website.owner?.toString();
+        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+            res.status(403).json({ message: "You are not authorized to delete this website" });
+            return;
+        }
+        // Unlink any pages associated with this website
+        await Content_1.default.updateMany({ website: id }, { $unset: { website: 1 } });
+        await Website_1.default.findByIdAndDelete(id);
         res.status(200).json({
-            message: `Website '${website.name}' and its ${deleted.deletedCount} pages deleted successfully.`,
+            message: "Website deleted successfully",
         });
     }
     catch (error) {
-        console.error("deleteWebsite error:", error);
+        console.error("Delete website error:", error);
         res.status(500).json({ message: "Server error deleting website" });
     }
 };
 exports.deleteWebsite = deleteWebsite;
+/**
+ * GET /api/websites/:id/pages
+ * Returns all pages belonging to the specified website.
+ */
+const getWebsitePages = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
+            return;
+        }
+        const { id } = req.params;
+        const website = await Website_1.default.findById(id);
+        if (!website) {
+            res.status(404).json({ message: "Website not found" });
+            return;
+        }
+        const websiteOwnerId = website.owner?._id
+            ? website.owner._id.toString()
+            : website.owner?.toString();
+        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+            res.status(403).json({ message: "You are not authorized to view this website" });
+            return;
+        }
+        const pages = await Content_1.default.find({
+            website: website._id,
+            type: "page",
+        }).sort({ createdAt: 1 });
+        res.status(200).json({
+            message: "Website pages fetched successfully",
+            pages,
+        });
+    }
+    catch (error) {
+        console.error("Get website pages error:", error);
+        res.status(500).json({ message: "Server error fetching website pages" });
+    }
+};
+exports.getWebsitePages = getWebsitePages;

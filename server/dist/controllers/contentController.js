@@ -77,7 +77,7 @@ const resolveUniqueSlug = async (rawSlug, excludeId) => {
 exports.resolveUniqueSlug = resolveUniqueSlug;
 const createContent = async (req, res) => {
     try {
-        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
+        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website } = req.body;
         if (!title || !content || !type) {
             res.status(400).json({
                 message: "Title, content and type are required",
@@ -95,6 +95,7 @@ const createContent = async (req, res) => {
             metaTitle: metaTitle || "",
             metaDescription: metaDescription || "",
             author: req.user?.id,
+            website: website || undefined,
         });
         res.status(201).json({
             message: "Content created successfully",
@@ -114,6 +115,9 @@ const getAllContent = async (req, res) => {
         const filter = {};
         if (req.query.type) {
             filter.type = req.query.type;
+        }
+        if (req.query.website) {
+            filter.website = req.query.website;
         }
         const contents = await Content_1.default.find(filter)
             .populate("author", "name email role")
@@ -158,7 +162,7 @@ exports.getContentById = getContentById;
 const updateContent = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
+        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website } = req.body;
         const existingContent = await Content_1.default.findById(id);
         if (!existingContent) {
             res.status(404).json({
@@ -183,6 +187,9 @@ const updateContent = async (req, res) => {
         }
         if (metaDescription !== undefined) {
             existingContent.metaDescription = metaDescription;
+        }
+        if (website !== undefined) {
+            existingContent.website = website || undefined;
         }
         await existingContent.save();
         res.status(200).json({

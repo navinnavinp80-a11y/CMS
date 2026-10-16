@@ -56,6 +56,15 @@ const userSchema = new mongoose_1.Schema({
         enum: ["admin", "editor"],
         default: "editor",
     },
+    plan: {
+        type: String,
+        enum: ["free", "premium"],
+        default: "free",
+    },
+    premiumExpiresAt: {
+        type: Date,
+        default: null,
+    },
 }, {
     timestamps: true,
 });

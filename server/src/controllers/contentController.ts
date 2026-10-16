@@ -84,7 +84,7 @@ export const createContent = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
+    const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website } = req.body;
 
     if (!title || !content || !type) {
       res.status(400).json({
@@ -105,6 +105,7 @@ export const createContent = async (
       metaTitle: metaTitle || "",
       metaDescription: metaDescription || "",
       author: req.user?.id,
+      website: website || undefined,
     });
 
     res.status(201).json({
@@ -128,6 +129,9 @@ export const getAllContent = async (
     const filter: Record<string, any> = {};
     if (req.query.type) {
       filter.type = req.query.type;
+    }
+    if (req.query.website) {
+      filter.website = req.query.website;
     }
 
     const contents = await Content.find(filter)
@@ -183,7 +187,7 @@ export const updateContent = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription } = req.body;
+    const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website } = req.body;
 
     const existingContent = await Content.findById(id);
 
@@ -212,6 +216,9 @@ export const updateContent = async (
     }
     if (metaDescription !== undefined) {
       existingContent.metaDescription = metaDescription;
+    }
+    if (website !== undefined) {
+      existingContent.website = website || undefined;
     }
 
     await existingContent.save();

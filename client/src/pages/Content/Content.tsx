@@ -22,10 +22,25 @@ interface ContentItem {
   status: "draft" | "published";
   author: any;
   createdAt: string;
+  website?: any;
+  websiteId?: string;
+}
+
+interface WebsiteItem {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  status: "draft" | "published";
+  homePage?: any;
+  owner?: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export default function Content() {
   const [contents, setContents] = useState<ContentItem[]>([]);
+  const [websites, setWebsites] = useState<WebsiteItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "post" | "page" | "draft" | "published">("all");
   const [loading, setLoading] = useState(true);
@@ -73,15 +88,18 @@ export default function Content() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/content", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
 
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 401) {
+      const [contentRes, webRes] = await Promise.all([
+        fetch("http://localhost:5000/api/content", { headers }),
+        fetch("http://localhost:5000/api/websites", { headers }).catch(() => null),
+      ]);
+
+      const data = await contentRes.json();
+      if (!contentRes.ok) {
+        if (contentRes.status === 401) {
           localStorage.removeItem("token");
           localStorage.removeItem("user");
           navigate("/login", { replace: true });
@@ -91,6 +109,17 @@ export default function Content() {
       }
 
       setContents(data.contents || data);
+
+      if (webRes && webRes.ok) {
+        const webData = await webRes.json();
+        setWebsites(
+          Array.isArray(webData.websites)
+            ? webData.websites
+            : webData.website
+              ? [webData.website]
+              : []
+        );
+      }
     } catch (err: any) {
       console.error("Failed to fetch contents:", err);
       setError(err instanceof Error ? err.message : "Failed to load contents");
@@ -107,51 +136,151 @@ export default function Content() {
     try {
       setError("");
       const token = localStorage.getItem("token");
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
+
+      const targetItem = displayItems.find((item) => item._id === id);
+      if (targetItem?.websiteId) {
+        await fetch(`http://localhost:5000/api/websites/${targetItem.websiteId}`, {
+          method: "DELETE",
+          headers,
+        }).catch(() => null);
+        setWebsites((prev) => prev.filter((w) => w._id !== targetItem.websiteId));
+      }
+
       const response = await fetch(`http://localhost:5000/api/content/${id}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
       });
 
       const data = await response.json();
-      if (!response.ok) {
+      if (!response.ok && !targetItem?.websiteId) {
         throw new Error(data.message || "Failed to delete content");
       }
 
       setContents((prev) => prev.filter((item) => item._id !== id));
+      void fetchContents();
     } catch (err: any) {
       console.error("Delete content error:", err);
       setError(err instanceof Error ? err.message : "Failed to delete content");
     }
   };
 
-  // Group all pages under one website entry so Home, About, and Contact are not listed as individual rows
+  // Group pages under their respective website so Home, About, and Contact are not listed as individual rows,
+  // while ensuring multiple websites are properly listed.
   const displayItems = useMemo(() => {
     const posts = contents.filter((item) => item.type === "post");
     const pages = contents.filter((item) => item.type === "page");
 
-    if (pages.length === 0) {
-      return posts;
+    const groupedPageIds = new Set<string>();
+    const websiteEntries: ContentItem[] = [];
+
+    // 1. Process explicit Website documents from /api/websites
+    if (websites.length > 0) {
+      for (const web of websites) {
+        // Find pages belonging to this website
+        const sitePages = pages.filter((p) => {
+          const pSiteId = typeof p.website === "object" ? p.website?._id : p.website;
+          return pSiteId && String(pSiteId) === String(web._id);
+        });
+
+        sitePages.forEach((p) => groupedPageIds.add(p._id));
+
+        const homePageDoc =
+          sitePages.find(
+            (p) =>
+              p.slug === "home" ||
+              p.title.toLowerCase() === "home" ||
+              (web.homePage && (p._id === web.homePage || p._id === (web.homePage as any)._id))
+          ) ||
+          (web.homePage && typeof web.homePage === "object" ? (web.homePage as any) : null) ||
+          sitePages[0];
+
+        websiteEntries.push({
+          _id: homePageDoc ? homePageDoc._id : web._id,
+          title: web.name || "Untitled Website",
+          slug: web.slug || (homePageDoc ? homePageDoc.slug : "home"),
+          content: homePageDoc?.content || "[]",
+          type: "page",
+          status:
+            web.status === "published" || sitePages.some((p) => p.status === "published")
+              ? "published"
+              : "draft",
+          author: web.owner || homePageDoc?.author,
+          createdAt: web.createdAt || homePageDoc?.createdAt || new Date().toISOString(),
+          websiteId: web._id,
+        });
+      }
     }
 
-    const homePage =
-      pages.find((p) => p.slug === "home" || p.title.toLowerCase() === "home") ||
-      pages[0];
+    // 2. Process remaining pages that are not linked to an explicit Website document
+    const unassignedPages = pages.filter((p) => !groupedPageIds.has(p._id));
 
-    const websiteEntry: ContentItem = {
-      _id: homePage._id,
-      title: "My Website",
-      slug: "home",
-      content: homePage.content,
-      type: "page",
-      status: pages.some((p) => p.status === "published") ? "published" : "draft",
-      author: homePage.author,
-      createdAt: homePage.createdAt,
-    };
+    if (unassignedPages.length > 0) {
+      // Group default pages: Home, About, Contact
+      const defaultPages = unassignedPages.filter((p) => {
+        const titleLower = (p.title || "").toLowerCase();
+        const slugLower = (p.slug || "").toLowerCase();
+        return (
+          slugLower === "home" ||
+          slugLower === "index" ||
+          titleLower === "home" ||
+          titleLower === "about" ||
+          titleLower === "contact" ||
+          slugLower === "about" ||
+          slugLower === "contact" ||
+          slugLower.startsWith("page-")
+        );
+      });
 
-    return [websiteEntry, ...posts];
-  }, [contents]);
+      // Other distinct pages/websites (e.g. "Sample", or any custom website created by the user)
+      const otherPages = unassignedPages.filter((p) => !defaultPages.includes(p));
+
+      // Only create "My Website" for default pages if we didn't already have one from websites
+      const alreadyHasDefault = websiteEntries.some(
+        (w) =>
+          w.title.toLowerCase() === "my website" ||
+          w.slug === "home" ||
+          w.slug === "my-website"
+      );
+
+      if (defaultPages.length > 0 && !alreadyHasDefault) {
+        const homePage =
+          defaultPages.find(
+            (p) => p.slug === "home" || p.title.toLowerCase() === "home"
+          ) || defaultPages[0];
+
+        websiteEntries.unshift({
+          _id: homePage._id,
+          title: "My Website",
+          slug: "home",
+          content: homePage.content,
+          type: "page",
+          status: defaultPages.some((p) => p.status === "published") ? "published" : "draft",
+          author: homePage.author,
+          createdAt: homePage.createdAt,
+        });
+      }
+
+      // Add each distinct other page/website as its own entry in the list
+      for (const page of otherPages) {
+        websiteEntries.push({
+          _id: page._id,
+          title: page.title,
+          slug: page.slug,
+          content: page.content,
+          type: "page",
+          status: page.status,
+          author: page.author,
+          createdAt: page.createdAt,
+          website: page.website,
+        });
+      }
+    }
+
+    return [...websiteEntries, ...posts];
+  }, [contents, websites]);
 
   const filteredContents = displayItems.filter((item) => {
     if (activeTab === "draft" && item.status !== "draft") return false;
