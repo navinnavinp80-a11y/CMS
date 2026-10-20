@@ -41,6 +41,8 @@ const registerUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                plan: user.plan || "free",
+                premiumExpiresAt: user.premiumExpiresAt || null,
             },
         });
     }
@@ -89,6 +91,8 @@ const loginUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                plan: user.plan || "free",
+                premiumExpiresAt: user.premiumExpiresAt || null,
             },
         });
     }

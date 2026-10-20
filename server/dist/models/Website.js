@@ -68,6 +68,11 @@ const websiteSchema = new mongoose_1.Schema({
         ref: "Content",
         default: undefined,
     },
+    templateId: {
+        type: String,
+        default: "minimal-clean",
+        trim: true,
+    },
     settings: {
         favicon: {
             type: String,

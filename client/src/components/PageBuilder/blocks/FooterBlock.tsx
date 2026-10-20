@@ -10,9 +10,10 @@ export function FooterBlock({ component, isPreviewMode }: FooterBlockProps) {
   const description = component.footerDescription || "Building beautiful digital experiences.";
   const copyright = component.footerCopyright || "© 2026 My Website. All rights reserved.";
   const links = component.footerLinks || [];
+  const variantClass = component.variant ? `variant-${component.variant}` : "";
 
   return (
-    <footer className="preview-footer">
+    <footer className={`preview-footer ${variantClass}`}>
       <div className="footer-content">
         {logo && <div className="footer-logo">{logo}</div>}
         {description && <p className="footer-description">{description}</p>}

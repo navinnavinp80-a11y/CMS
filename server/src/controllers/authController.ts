@@ -46,6 +46,8 @@ export const registerUser = async (
         name: user.name,
         email: user.email,
         role: user.role,
+        plan: user.plan || "free",
+        premiumExpiresAt: user.premiumExpiresAt || null,
       },
     });
   } catch (error) {
@@ -111,6 +113,8 @@ export const loginUser = async (
         name: user.name,
         email: user.email,
         role: user.role,
+        plan: user.plan || "free",
+        premiumExpiresAt: user.premiumExpiresAt || null,
       },
     });
   } catch (error) {

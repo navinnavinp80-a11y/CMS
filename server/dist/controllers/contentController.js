@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPublicPagesList = exports.getPublicContentBySlug = exports.deleteContent = exports.updateContent = exports.getContentById = exports.getAllContent = exports.createContent = exports.resolveUniqueSlug = exports.sanitizeSlug = exports.RESERVED_SLUGS = void 0;
 const Content_1 = __importDefault(require("../models/Content"));
+const User_1 = __importDefault(require("../models/User"));
+const templateService_1 = require("../services/templateService");
 exports.RESERVED_SLUGS = new Set([
     "login",
     "signup",
@@ -77,12 +79,26 @@ const resolveUniqueSlug = async (rawSlug, excludeId) => {
 exports.resolveUniqueSlug = resolveUniqueSlug;
 const createContent = async (req, res) => {
     try {
-        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website } = req.body;
+        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website, templateId } = req.body;
         if (!title || !content || !type) {
             res.status(400).json({
                 message: "Title, content and type are required",
             });
             return;
+        }
+        // Backend enforcement for template plan access
+        if (templateId) {
+            const resolved = (0, templateService_1.resolveTemplateId)(templateId);
+            if ((0, templateService_1.isTemplatePremium)(resolved)) {
+                const user = await User_1.default.findById(req.user?.id);
+                if (!(0, templateService_1.canUserAccessTemplate)(user, resolved)) {
+                    res.status(403).json({
+                        message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
+                        premiumRequired: true,
+                    });
+                    return;
+                }
+            }
         }
         const safeSlug = await (0, exports.resolveUniqueSlug)(slug || title);
         const newContent = await Content_1.default.create({
@@ -96,6 +112,7 @@ const createContent = async (req, res) => {
             metaDescription: metaDescription || "",
             author: req.user?.id,
             website: website || undefined,
+            templateId: templateId ? (0, templateService_1.resolveTemplateId)(templateId) : undefined,
         });
         res.status(201).json({
             message: "Content created successfully",
@@ -162,13 +179,35 @@ exports.getContentById = getContentById;
 const updateContent = async (req, res) => {
     try {
         const { id } = req.params;
-        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website } = req.body;
+        const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website, templateId } = req.body;
         const existingContent = await Content_1.default.findById(id);
         if (!existingContent) {
             res.status(404).json({
                 message: "Content not found",
             });
             return;
+        }
+        const authorId = existingContent.author?.toString();
+        if (authorId && authorId !== req.user?.id && req.user?.role !== "admin") {
+            res.status(403).json({
+                message: "You are not authorized to modify this content",
+            });
+            return;
+        }
+        // Backend enforcement for template plan access
+        if (templateId !== undefined && templateId) {
+            const resolved = (0, templateService_1.resolveTemplateId)(templateId);
+            if ((0, templateService_1.isTemplatePremium)(resolved)) {
+                const user = await User_1.default.findById(req.user?.id);
+                if (!(0, templateService_1.canUserAccessTemplate)(user, resolved)) {
+                    res.status(403).json({
+                        message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
+                        premiumRequired: true,
+                    });
+                    return;
+                }
+            }
+            existingContent.templateId = resolved;
         }
         const idParam = Array.isArray(id) ? id[0] : String(id);
         if (slug !== undefined) {
@@ -208,13 +247,21 @@ exports.updateContent = updateContent;
 const deleteContent = async (req, res) => {
     try {
         const { id } = req.params;
-        const content = await Content_1.default.findByIdAndDelete(id);
+        const content = await Content_1.default.findById(id);
         if (!content) {
             res.status(404).json({
                 message: "Content not found",
             });
             return;
         }
+        const authorId = content.author?.toString();
+        if (authorId && authorId !== req.user?.id && req.user?.role !== "admin") {
+            res.status(403).json({
+                message: "You are not authorized to delete this content",
+            });
+            return;
+        }
+        await Content_1.default.findByIdAndDelete(id);
         res.status(200).json({
             message: "Content deleted successfully",
         });

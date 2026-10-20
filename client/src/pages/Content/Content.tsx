@@ -9,9 +9,22 @@ import {
   Pencil,
   Trash2,
   ExternalLink,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import AdminLayout from "../../components/Layout/AdminLayout";
+import { createWebsite } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
+import { PAGE_TEMPLATES } from "../../components/PageBuilder/templates";
 import "./Content.css";
+
+const normalizeSlug = (text: string): string => {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
 
 interface ContentItem {
   _id: string;
@@ -47,6 +60,21 @@ export default function Content() {
   const [error, setError] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuPlacement, setMenuPlacement] = useState<"down" | "up">("down");
+
+  // Website creation modal state
+  const { isPremium } = useAuth();
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("minimal-clean");
+  const [showWebsiteModal, setShowWebsiteModal] = useState(false);
+  const [newWebsiteName, setNewWebsiteName] = useState("");
+  const [newWebsiteSlug, setNewWebsiteSlug] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [creatingWebsite, setCreatingWebsite] = useState(false);
+  const [websiteModalError, setWebsiteModalError] = useState("");
+  const [upgradeRequired, setUpgradeRequired] = useState<{
+    message: string;
+    currentCount?: number;
+    maxAllowed?: number;
+  } | null>(null);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -164,6 +192,95 @@ export default function Content() {
     } catch (err: any) {
       console.error("Delete content error:", err);
       setError(err instanceof Error ? err.message : "Failed to delete content");
+    }
+  };
+
+  const handleOpenWebsiteModal = () => {
+    setNewWebsiteName("");
+    setNewWebsiteSlug("");
+    setSelectedTemplateId("minimal-clean");
+    setSlugManuallyEdited(false);
+    setWebsiteModalError("");
+    setUpgradeRequired(null);
+    setShowWebsiteModal(true);
+  };
+
+  const handleCloseWebsiteModal = () => {
+    if (creatingWebsite) return;
+    setShowWebsiteModal(false);
+    setWebsiteModalError("");
+    setUpgradeRequired(null);
+  };
+
+  const handleWebsiteNameChange = (val: string) => {
+    setNewWebsiteName(val);
+    if (!slugManuallyEdited) {
+      setNewWebsiteSlug(normalizeSlug(val));
+    }
+  };
+
+  const handleWebsiteSlugChange = (val: string) => {
+    setSlugManuallyEdited(true);
+    setNewWebsiteSlug(normalizeSlug(val));
+  };
+
+  const handleCreateWebsiteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = newWebsiteName.trim();
+    const cleanSlug = normalizeSlug(newWebsiteSlug || trimmedName);
+
+    if (!trimmedName) {
+      setWebsiteModalError("Website name is required.");
+      return;
+    }
+
+    if (selectedTemplateId === "premium-saas" && !isPremium) {
+      setWebsiteModalError("The Obsidian SaaS template is exclusive to Premium subscribers. Upgrade your account or select a Free template.");
+      return;
+    }
+
+    try {
+      setCreatingWebsite(true);
+      setWebsiteModalError("");
+      setUpgradeRequired(null);
+
+      const createdSite = await createWebsite({
+        name: trimmedName,
+        slug: cleanSlug,
+        templateId: selectedTemplateId,
+      });
+
+      setShowWebsiteModal(false);
+      setNewWebsiteName("");
+      setNewWebsiteSlug("");
+      setSelectedTemplateId("minimal-clean");
+      setSlugManuallyEdited(false);
+
+      await fetchContents();
+
+      const homePageId =
+        typeof createdSite.homePage === "object"
+          ? createdSite.homePage?._id
+          : createdSite.homePage;
+
+      if (homePageId) {
+        navigate(`/content/edit-page/${homePageId}`);
+      }
+    } catch (err: any) {
+      console.error("Create website error:", err);
+      if (err.status === 403 || err.limitReached) {
+        setUpgradeRequired({
+          message:
+            err.message ||
+            "Free plan allows only 2 websites. Upgrade to Premium to create more websites.",
+          currentCount: err.currentCount,
+          maxAllowed: err.maxAllowed,
+        });
+      } else {
+        setWebsiteModalError(err.message || "Failed to create website");
+      }
+    } finally {
+      setCreatingWebsite(false);
     }
   };
 
@@ -328,6 +445,15 @@ export default function Content() {
           <div className="content-header-actions">
             <button
               type="button"
+              className="cms-btn-primary"
+              onClick={handleOpenWebsiteModal}
+            >
+              <Plus size={16} />
+              <span>Create Website</span>
+            </button>
+
+            <button
+              type="button"
               className="cms-btn-secondary"
               onClick={() => navigate("/content/create-page")}
             >
@@ -337,10 +463,10 @@ export default function Content() {
 
             <button
               type="button"
-              className="cms-btn-primary"
+              className="cms-btn-secondary"
               onClick={() => navigate("/content/create")}
             >
-              <Plus size={16} />
+              <FileText size={16} />
               <span>Create Blog</span>
             </button>
           </div>
@@ -557,6 +683,215 @@ export default function Content() {
           )}
         </div>
       </div>
+      {/* Website Creation Modal */}
+      {showWebsiteModal && (
+        <div className="content-modal-overlay" onClick={handleCloseWebsiteModal}>
+          <div className="content-modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="content-modal-header">
+              <div className="content-modal-title-group">
+                <div className="content-modal-icon-badge">
+                  <Globe size={18} />
+                </div>
+                <div>
+                  <h2>Create New Website</h2>
+                  <p>Launch an independent website with its own pages and navigation.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="content-modal-close-btn"
+                onClick={handleCloseWebsiteModal}
+                disabled={creatingWebsite}
+                title="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {upgradeRequired ? (
+              <div className="content-modal-body">
+                <div className="content-premium-alert">
+                  <div className="content-premium-alert-header">
+                    <AlertCircle size={22} color="#D97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <h3 className="content-premium-alert-title">Free Plan Limit Reached</h3>
+                      <p className="content-premium-alert-desc">{upgradeRequired.message}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "12px" }}>
+                  <button
+                    type="button"
+                    className="cms-btn-primary"
+                    onClick={handleCloseWebsiteModal}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateWebsiteSubmit}>
+                <div className="content-modal-body">
+                  {websiteModalError && (
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        background: "#FEF2F2",
+                        border: "1px solid #FCA5A5",
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        color: "#DC2626",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <AlertCircle size={16} />
+                      <span>{websiteModalError}</span>
+                    </div>
+                  )}
+
+                  <div className="content-modal-form-group">
+                    <label>
+                      Website Name <span style={{ color: "#EF4444" }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="content-modal-form-input"
+                      placeholder="e.g. My Portfolio"
+                      value={newWebsiteName}
+                      onChange={(e) => handleWebsiteNameChange(e.target.value)}
+                      autoFocus
+                      required
+                    />
+                  </div>
+
+                  <div className="content-modal-form-group">
+                    <label>
+                      URL Slug <span style={{ color: "#EF4444" }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="content-modal-form-input"
+                      placeholder="e.g. my-portfolio"
+                      value={newWebsiteSlug}
+                      onChange={(e) => handleWebsiteSlugChange(e.target.value)}
+                      required
+                    />
+                    <span style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>
+                      The slug determines the root path for this website instance.
+                    </span>
+                  </div>
+
+                  <div className="content-modal-form-group">
+                    <label>
+                      Starting Template <span style={{ color: "#EF4444" }}>*</span>
+                    </label>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "8px", marginTop: "6px" }}>
+                      {PAGE_TEMPLATES.map((t) => {
+                        const isLocked = t.plan === "premium" && !isPremium;
+                        const isSelected = selectedTemplateId === t.id;
+                        return (
+                          <div
+                            key={t.id}
+                            onClick={() => {
+                              if (isLocked) {
+                                setWebsiteModalError(`"${t.name}" is a Premium template. Upgrade to unlock this design.`);
+                              } else {
+                                setSelectedTemplateId(t.id);
+                                setWebsiteModalError("");
+                              }
+                            }}
+                            style={{
+                              border: isSelected ? "2px solid #2563EB" : "1px solid #E2E8F0",
+                              background: isSelected ? "#EFF6FF" : isLocked ? "#F8FAFC" : "#FFFFFF",
+                              borderRadius: "10px",
+                              padding: "10px 14px",
+                              cursor: isLocked ? "not-allowed" : "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <input
+                                type="radio"
+                                name="websiteTemplate"
+                                checked={isSelected}
+                                onChange={() => {
+                                  if (!isLocked) {
+                                    setSelectedTemplateId(t.id);
+                                    setWebsiteModalError("");
+                                  }
+                                }}
+                                disabled={isLocked}
+                              />
+                              <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <strong style={{ fontSize: "13px", color: isLocked ? "#64748B" : "#0F172A" }}>
+                                    {t.name}
+                                  </strong>
+                                  <span
+                                    style={{
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      padding: "2px 7px",
+                                      borderRadius: "10px",
+                                      background: t.plan === "premium" ? "linear-gradient(135deg, #7C3AED, #4F46E5)" : "#ECFDF5",
+                                      color: t.plan === "premium" ? "#FFFFFF" : "#059669",
+                                    }}
+                                  >
+                                    {t.plan === "premium" ? "👑 Premium" : "Free"}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: "11px", color: "#64748B", display: "block", marginTop: "2px" }}>
+                                  {t.description}
+                                </span>
+                              </div>
+                            </div>
+                            {isLocked && (
+                              <span style={{ fontSize: "11px", color: "#D97706", fontWeight: 600, flexShrink: 0 }}>
+                                🔒 Locked
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="content-modal-footer">
+                  <button
+                    type="button"
+                    className="cms-btn-secondary"
+                    onClick={handleCloseWebsiteModal}
+                    disabled={creatingWebsite}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="cms-btn-primary"
+                    disabled={creatingWebsite || !newWebsiteName.trim()}
+                  >
+                    {creatingWebsite ? (
+                      <span>Creating...</span>
+                    ) : (
+                      <>
+                        <Plus size={16} />
+                        <span>Create & Open Editor</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

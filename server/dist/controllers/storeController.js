@@ -176,7 +176,7 @@ const createStore = async (req, res) => {
         if (!entitlement.allowed) {
             res.status(403).json({
                 message: entitlement.reason ||
-                    "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+                    "Creation limit reached on Free plan. Upgrade to Premium to create more stores.",
                 limitReached: true,
                 currentCount: entitlement.currentCount,
                 maxAllowed: entitlement.maxAllowed,
@@ -597,7 +597,7 @@ const saveDraftStoreConfig = async (req, res) => {
             if (!entitlement.allowed) {
                 res.status(403).json({
                     message: entitlement.reason ||
-                        "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+                        "Creation limit reached on Free plan. Upgrade to Premium to create more stores.",
                     limitReached: true,
                     currentCount: entitlement.currentCount,
                     maxAllowed: entitlement.maxAllowed,
@@ -665,7 +665,7 @@ const publishStoreConfig = async (req, res) => {
             if (!entitlement.allowed) {
                 res.status(403).json({
                     message: entitlement.reason ||
-                        "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+                        "Creation limit reached on Free plan. Upgrade to Premium to create more stores.",
                     limitReached: true,
                     currentCount: entitlement.currentCount,
                     maxAllowed: entitlement.maxAllowed,

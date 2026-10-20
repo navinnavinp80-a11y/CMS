@@ -11,6 +11,7 @@ export interface IContent extends Document {
   metaDescription?: string;
   author: mongoose.Types.ObjectId;
   website?: mongoose.Types.ObjectId;
+  templateId?: string;
 }
 
 const contentSchema = new Schema<IContent>(
@@ -74,6 +75,12 @@ const contentSchema = new Schema<IContent>(
       ref: "Website",
       required: false,
       index: true,
+    },
+
+    templateId: {
+      type: String,
+      default: "",
+      trim: true,
     },
   },
   {

@@ -5,8 +5,10 @@ interface ColumnsBlockProps {
 }
 
 export function ColumnsBlock({ component }: ColumnsBlockProps) {
+  const variantClass = component.variant ? `variant-${component.variant}` : "";
+
   return (
-    <section className="preview-columns">
+    <section className={`preview-columns ${variantClass}`}>
       <div className="column">
         {component.columns?.left.type === "image" ? (
           <img

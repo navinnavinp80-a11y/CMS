@@ -10,13 +10,13 @@ import {
   publishStoreConfig,
 } from "../controllers/storeController";
 import { protect } from "../middleware/authMiddleware";
-import { requireCreationEntitlement } from "../middleware/planMiddleware";
+import { requireStoreCreationEntitlement } from "../middleware/planMiddleware";
 
 const router = Router();
 
 // Store CRUD routes
 router.get("/", protect, getStores);
-router.post("/", protect, requireCreationEntitlement, createStore);
+router.post("/", protect, requireStoreCreationEntitlement, createStore);
 router.get("/:id", protect, getStoreById);
 router.put("/:id", protect, updateStore);
 router.delete("/:id", protect, deleteStore);

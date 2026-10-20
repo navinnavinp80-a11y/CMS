@@ -28,8 +28,10 @@ import {
   Send,
   ExternalLink,
   Globe,
+  Lock,
 } from "lucide-react";
 import "./PageBuilder.css";
+import { useAuth } from "../../context/AuthContext";
 import { PageSettingsModal, generateSlug } from "../../components/PageBuilder/PageSettingsModal";
 import { PAGE_TEMPLATES, type PageTemplateDefinition } from "../../components/PageBuilder/templates";
 import { PageTemplatesModal } from "../../components/PageBuilder/PageTemplatesModal";
@@ -149,9 +151,11 @@ function PageBuilder() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
+  const { isPremium } = useAuth();
 
   const [pageTitle, setPageTitle] = useState("");
   const [components, setComponents] = useState<PageComponent[]>([]);
+  const [templateId, setTemplateId] = useState<string>("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggedType, setDraggedType] = useState<ComponentType | null>(null);
   const [draggedComponentId, setDraggedComponentId] = useState<string | null>(null);
@@ -177,6 +181,11 @@ function PageBuilder() {
   const [pendingTemplate, setPendingTemplate] = useState<PageTemplateDefinition | null>(null);
 
   const handleSelectTemplate = (template: PageTemplateDefinition) => {
+    if (template.plan === "premium" && !isPremium) {
+      setError(`"${template.name}" is a Premium template. Upgrade your account to use premium templates.`);
+      return;
+    }
+    setError("");
     if (components.length > 0) {
       setPendingTemplate(template);
     } else {
@@ -187,6 +196,7 @@ function PageBuilder() {
   const applyTemplateComponents = (template: PageTemplateDefinition) => {
     const newComponents = template.createComponents();
     setComponents(newComponents);
+    setTemplateId(template.id);
     if (newComponents.length > 0) {
       setSelectedId(newComponents[0].id);
     } else {
@@ -287,6 +297,7 @@ function PageBuilder() {
     setMetaDescription("");
     setIsSlugUserModified(false);
     setComponents([]);
+    setTemplateId("");
     setSelectedId(null);
     setError("");
     setSaveNotice("");
@@ -351,6 +362,7 @@ function PageBuilder() {
       }
 
       setComponents(savedComponents);
+      setTemplateId(page.templateId || "");
       setLastSavedState({
         title: page.title || "",
         slug: page.slug || "",
@@ -1072,12 +1084,16 @@ function PageBuilder() {
           featuredImage,
           metaTitle,
           metaDescription,
+          templateId: templateId || undefined,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.premiumRequired) {
+          throw new Error(data.message || "This template requires an active Premium plan. Upgrade to unlock this template.");
+        }
         throw new Error(data.message || "Failed to save page");
       }
 
@@ -1360,27 +1376,42 @@ function PageBuilder() {
                 </div>
 
                 <div className="sidebar-template-cards">
-                  {PAGE_TEMPLATES.map((tmpl) => (
-                    <div
-                      key={tmpl.id}
-                      className="sidebar-template-card"
-                      onClick={() => handleSelectTemplate(tmpl)}
-                    >
-                      <div className="tmpl-card-header">
-                        <strong>{tmpl.name}</strong>
-                        <span className="tmpl-tag">{tmpl.category}</span>
+                  {PAGE_TEMPLATES.map((tmpl) => {
+                    const isLocked = tmpl.plan === "premium" && !isPremium;
+                    return (
+                      <div
+                        key={tmpl.id}
+                        className={`sidebar-template-card ${isLocked ? "sidebar-tmpl-locked" : ""} ${tmpl.plan === "premium" ? "sidebar-tmpl-premium" : ""}`}
+                        onClick={() => handleSelectTemplate(tmpl)}
+                      >
+                        <div className="tmpl-card-header">
+                          <strong>{tmpl.name}</strong>
+                          <span className={`tmpl-tag ${tmpl.plan === "premium" ? "tag-premium" : "tag-free"}`}>
+                            {tmpl.plan === "premium" ? "👑 Premium" : "Free"}
+                          </span>
+                        </div>
+                        <p>{tmpl.description}</p>
+                        <div className="tmpl-blocks-preview">
+                          {tmpl.blockSummary.map((b, i) => (
+                            <span key={i} className="tmpl-block-chip">{b.name}</span>
+                          ))}
+                        </div>
+                        {isLocked ? (
+                          <button type="button" className="apply-sidebar-tmpl-btn btn-locked-sidebar">
+                            <Lock size={12} />
+                            <span>Upgrade to Unlock</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className={`apply-sidebar-tmpl-btn ${tmpl.plan === "premium" ? "btn-sidebar-premium" : ""}`}
+                          >
+                            Apply Layout
+                          </button>
+                        )}
                       </div>
-                      <p>{tmpl.description}</p>
-                      <div className="tmpl-blocks-preview">
-                        {tmpl.blockSummary.map((b, i) => (
-                          <span key={i} className="tmpl-block-chip">{b.name}</span>
-                        ))}
-                      </div>
-                      <button type="button" className="apply-sidebar-tmpl-btn">
-                        Apply Layout
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1393,7 +1424,11 @@ function PageBuilder() {
           onDragOver={(e) => !isPreviewMode && e.preventDefault()}
           onDrop={(e) => !isPreviewMode && handleCanvasDrop(e)}
         >
-          <div className={`page-canvas ${isPreviewMode ? "preview-canvas" : ""} device-${deviceMode}`}>
+          <div
+            className={`page-canvas ${isPreviewMode ? "preview-canvas" : ""} device-${deviceMode} ${
+              components.find((c) => c.variant)?.variant ? `theme-${components.find((c) => c.variant)?.variant}` : ""
+            }`}
+          >
             {/* CANVAS BROWSER CHROME HEADER */}
             <div className="canvas-browser-chrome">
               <div className="chrome-left">

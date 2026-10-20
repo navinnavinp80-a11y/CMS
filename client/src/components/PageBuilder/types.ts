@@ -51,5 +51,7 @@ export interface PageComponent {
   footerDescription?: string;
   footerCopyright?: string;
   footerLinks?: FooterLink[];
+  variant?: "default" | "minimal" | "modern" | "premium" | string;
+  badge?: string;
 }
 

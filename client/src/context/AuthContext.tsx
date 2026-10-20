@@ -5,12 +5,15 @@ export interface UserSession {
   name?: string;
   email?: string;
   role?: string;
+  plan?: "free" | "premium";
+  premiumExpiresAt?: string | null;
 }
 
 export interface AuthContextType {
   token: string | null;
   user: UserSession | null;
   isAuthenticated: boolean;
+  isPremium: boolean;
   isLoading: boolean;
   login: (token: string, user?: UserSession) => void;
   logout: () => void;
@@ -201,12 +204,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  const isPremium = Boolean(
+    authState.user?.role === "admin" ||
+    (authState.user?.plan === "premium" &&
+      (!authState.user?.premiumExpiresAt || new Date(authState.user.premiumExpiresAt).getTime() > Date.now()))
+  );
+
   return (
     <AuthContext.Provider
       value={{
         token: authState.token,
         user: authState.user,
         isAuthenticated: authState.isAuthenticated,
+        isPremium,
         isLoading,
         login,
         logout,

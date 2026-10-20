@@ -6,7 +6,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getWebsitePages = exports.deleteWebsite = exports.updateWebsite = exports.getWebsiteById = exports.createWebsite = exports.getWebsites = exports.normalizeWebsiteSlug = void 0;
 const Website_1 = __importDefault(require("../models/Website"));
 const Content_1 = __importDefault(require("../models/Content"));
+const User_1 = __importDefault(require("../models/User"));
 const entitlementService_1 = require("../services/entitlementService");
+const templateService_1 = require("../services/templateService");
+const defaultTemplateComponents_1 = require("../services/defaultTemplateComponents");
 const normalizeWebsiteSlug = (slug) => {
     return slug
         .toLowerCase()
@@ -40,27 +43,10 @@ const getWebsites = async (req, res) => {
                     ? { $and: [baseFilter, { $or: searchConditions }] }
                     : { $or: searchConditions };
         }
-        let websites = await Website_1.default.find(filter)
+        const websites = await Website_1.default.find(filter)
             .populate("owner", "name email role")
             .populate("homePage", "title slug status")
             .sort({ updatedAt: -1 });
-        // If no websites exist in database, provision default "My Website"
-        if (websites.length === 0) {
-            const existingHome = await Content_1.default.findOne({ slug: "home", type: "page" });
-            const defaultSite = await Website_1.default.create({
-                name: "My Website",
-                slug: "my-website",
-                description: "Primary website containing Home, About, Contact, and landing pages.",
-                owner: userId,
-                status: "published",
-                homePage: existingHome ? existingHome._id : undefined,
-            });
-            if (existingHome && !existingHome.website) {
-                existingHome.website = defaultSite._id;
-                await existingHome.save();
-            }
-            websites = [defaultSite];
-        }
         // Ensure every website has a homePage linked so frontend page editor can always open it
         for (const site of websites) {
             if (!site.homePage) {
@@ -107,7 +93,7 @@ const createWebsite = async (req, res) => {
             res.status(401).json({ message: "Unauthorized: Missing authentication" });
             return;
         }
-        // Entitlement verification: Free users get max 2 websites; starting from 3rd requires active Premium
+        // Entitlement verification: Free users get max 2 websites; 3rd requires active Premium
         const entitlement = await (0, entitlementService_1.canUserCreateWebsite)(userId);
         if (!entitlement.allowed) {
             res.status(403).json({
@@ -116,11 +102,10 @@ const createWebsite = async (req, res) => {
                 limitReached: true,
                 currentCount: entitlement.currentCount,
                 maxAllowed: entitlement.maxAllowed,
-                remaining: entitlement.remaining,
             });
             return;
         }
-        const { name, slug, description, status, settings } = req.body;
+        const { name, slug, description, status, settings, templateId } = req.body;
         const finalName = String(name || "").trim();
         if (!finalName) {
             res.status(400).json({ message: "Website name is required" });
@@ -132,6 +117,18 @@ const createWebsite = async (req, res) => {
                 message: "Invalid slug format. Please use letters, numbers, and hyphens.",
             });
             return;
+        }
+        // Backend template access entitlement check
+        const chosenTemplateId = (0, templateService_1.resolveTemplateId)(templateId || "minimal-clean");
+        if ((0, templateService_1.isTemplatePremium)(chosenTemplateId)) {
+            const user = await User_1.default.findById(userId);
+            if (!(0, templateService_1.canUserAccessTemplate)(user, chosenTemplateId)) {
+                res.status(403).json({
+                    message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
+                    premiumRequired: true,
+                });
+                return;
+            }
         }
         // Check if slug is already taken
         const slugExists = await Website_1.default.findOne({ slug: cleanSlug });
@@ -147,17 +144,20 @@ const createWebsite = async (req, res) => {
             description: description || "",
             owner: userId,
             status: status === "published" ? "published" : "draft",
+            templateId: chosenTemplateId,
             settings: settings || {},
         });
-        // Auto-create initial home page for the new website
+        // Auto-create initial home page with chosen template components
+        const initialComponents = (0, defaultTemplateComponents_1.getDefaultComponentsForTemplate)(chosenTemplateId, finalName);
         const homePage = await Content_1.default.create({
             title: `${finalName} Home`,
             slug: cleanSlug === "home" ? `home-${Date.now().toString().slice(-4)}` : cleanSlug,
-            content: JSON.stringify([]),
+            content: JSON.stringify(initialComponents),
             type: "page",
             status: status === "published" ? "published" : "draft",
             author: userId,
             website: newWebsite._id,
+            templateId: chosenTemplateId,
         });
         newWebsite.homePage = homePage._id;
         await newWebsite.save();
@@ -245,7 +245,21 @@ const updateWebsite = async (req, res) => {
             res.status(403).json({ message: "You are not authorized to modify this website" });
             return;
         }
-        const { name, slug, description, status, homePage, settings } = req.body;
+        const { name, slug, description, status, homePage, settings, templateId } = req.body;
+        if (templateId !== undefined && templateId) {
+            const chosenTemplateId = (0, templateService_1.resolveTemplateId)(templateId);
+            if ((0, templateService_1.isTemplatePremium)(chosenTemplateId)) {
+                const user = await User_1.default.findById(userId);
+                if (!(0, templateService_1.canUserAccessTemplate)(user, chosenTemplateId)) {
+                    res.status(403).json({
+                        message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
+                        premiumRequired: true,
+                    });
+                    return;
+                }
+            }
+            website.templateId = chosenTemplateId;
+        }
         if (slug) {
             const cleanSlug = (0, exports.normalizeWebsiteSlug)(slug);
             if (!cleanSlug) {
@@ -327,8 +341,26 @@ const deleteWebsite = async (req, res) => {
             res.status(403).json({ message: "You are not authorized to delete this website" });
             return;
         }
-        // Unlink any pages associated with this website
-        await Content_1.default.updateMany({ website: id }, { $unset: { website: 1 } });
+        // Unlink any pages associated with this website without causing index collisions
+        const sitePages = await Content_1.default.find({ website: id });
+        for (const page of sitePages) {
+            try {
+                page.website = undefined;
+                const collision = await Content_1.default.findOne({
+                    $or: [{ website: null }, { website: { $exists: false } }],
+                    slug: page.slug,
+                    _id: { $ne: page._id },
+                });
+                if (collision) {
+                    page.slug = `${page.slug}-${Date.now().toString().slice(-4)}`;
+                }
+                await page.save();
+            }
+            catch (e) {
+                // Fallback: delete orphan page if it cannot be unlinked cleanly
+                await Content_1.default.findByIdAndDelete(page._id).catch(() => null);
+            }
+        }
         await Website_1.default.findByIdAndDelete(id);
         res.status(200).json({
             message: "Website deleted successfully",

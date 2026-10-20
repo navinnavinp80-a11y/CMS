@@ -117,6 +117,14 @@ export const deleteMedia = async (
       return;
     }
 
+    const uploaderId = media.uploadedBy?.toString();
+    if (uploaderId && uploaderId !== req.user?.id && req.user?.role !== "admin") {
+      res.status(403).json({
+        message: "You are not authorized to delete this media asset",
+      });
+      return;
+    }
+
     const filePath = path.join(
       process.cwd(),
       "uploads",

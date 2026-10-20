@@ -5,8 +5,10 @@ interface TextBlockProps {
 }
 
 export function TextBlock({ component }: TextBlockProps) {
+  const variantClass = component.variant ? `variant-${component.variant}` : "";
+
   return (
-    <section className="preview-text">
+    <section className={`preview-text ${variantClass}`}>
       <p>{component.text}</p>
     </section>
   );

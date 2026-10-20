@@ -7,9 +7,10 @@ interface DividerBlockProps {
 export function DividerBlock({ component }: DividerBlockProps) {
   const style = component.dividerStyle || "solid";
   const width = component.dividerWidth || "100%";
+  const variantClass = component.variant ? `variant-${component.variant}` : "";
 
   return (
-    <div className="preview-divider">
+    <div className={`preview-divider ${variantClass}`}>
       <hr
         style={{
           border: "none",

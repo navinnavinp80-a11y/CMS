@@ -79,8 +79,10 @@ export function NavbarBlock({ component, isPreviewMode }: NavbarBlockProps) {
     navigate(cleanUrl);
   };
 
+  const variantClass = component.variant ? `variant-${component.variant}` : "";
+
   return (
-    <header className="preview-navbar">
+    <header className={`preview-navbar ${variantClass}`}>
       <div className="navbar-logo">
         {component.navbarLogo || "My Website"}
       </div>

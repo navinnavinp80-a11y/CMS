@@ -418,3 +418,64 @@ export const getPublicStoreConfig = async (slug?: string): Promise<{
 export const getPublicStoreConfigBySlug = async (slug: string) => {
   return getPublicStoreConfig(slug);
 };
+
+export interface WebsiteData {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  status: "draft" | "published";
+  homePage?: any;
+  owner?: any;
+  templateId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const getWebsites = async (): Promise<WebsiteData[]> => {
+  const token = localStorage.getItem("token");
+  if (!token) throw new Error("No authentication token found");
+
+  const response = await fetch(`${API_URL}/websites`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch websites");
+  }
+
+  return Array.isArray(data.websites) ? data.websites : data.website ? [data.website] : [];
+};
+
+export const createWebsite = async (payload: {
+  name: string;
+  slug?: string;
+  description?: string;
+  status?: "draft" | "published";
+  templateId?: string;
+}): Promise<WebsiteData> => {
+  const token = localStorage.getItem("token");
+  if (!token) throw new Error("No authentication token found");
+
+  const response = await fetch(`${API_URL}/websites`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    const error: any = new Error(data.message || "Failed to create website");
+    error.status = response.status;
+    error.limitReached = data.limitReached;
+    error.currentCount = data.currentCount;
+    error.maxAllowed = data.maxAllowed;
+    throw error;
+  }
+
+  return data.website;
+};

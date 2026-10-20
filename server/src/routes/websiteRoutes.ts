@@ -8,12 +8,12 @@ import {
   getWebsitePages,
 } from "../controllers/websiteController";
 import { protect } from "../middleware/authMiddleware";
-import { requireCreationEntitlement } from "../middleware/planMiddleware";
+import { requireWebsiteCreationEntitlement } from "../middleware/planMiddleware";
 
 const router = Router();
 
 router.get("/", protect, getWebsites);
-router.post("/", protect, requireCreationEntitlement, createWebsite);
+router.post("/", protect, requireWebsiteCreationEntitlement, createWebsite);
 router.get("/:id", protect, getWebsiteById);
 router.put("/:id", protect, updateWebsite);
 router.delete("/:id", protect, deleteWebsite);

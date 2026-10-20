@@ -185,8 +185,10 @@ export default function PublicPageViewer({ isHome = false }: PublicPageViewerPro
     );
   }
 
+  const activeVariant = components.find((c) => c.variant)?.variant || "";
+
   return (
-    <main className="public-page-container">
+    <main className={`public-page-container ${activeVariant ? `theme-${activeVariant}` : ""}`}>
       {components.length > 0 ? (
         components.map((comp) => {
           switch (comp.type) {

@@ -1,7 +1,14 @@
 import { Request, Response } from "express";
 import Website from "../models/Website";
 import Content from "../models/Content";
-import { canUserCreate } from "../services/entitlementService";
+import User from "../models/User";
+import { canUserCreateWebsite } from "../services/entitlementService";
+import {
+  isTemplatePremium,
+  canUserAccessTemplate,
+  resolveTemplateId,
+} from "../services/templateService";
+import { getDefaultComponentsForTemplate } from "../services/defaultTemplateComponents";
 
 export const normalizeWebsiteSlug = (slug: string): string => {
   return slug
@@ -98,13 +105,13 @@ export const createWebsite = async (
       return;
     }
 
-    // Entitlement verification
-    const entitlement = await canUserCreate(userId);
+    // Entitlement verification: Free users get max 2 websites; 3rd requires active Premium
+    const entitlement = await canUserCreateWebsite(userId);
     if (!entitlement.allowed) {
       res.status(403).json({
         message:
           entitlement.reason ||
-          "Creation limit reached on Free plan. Upgrade to Premium to create more websites and stores.",
+          "Free plan allows only 2 websites. Upgrade to Premium to create more websites.",
         limitReached: true,
         currentCount: entitlement.currentCount,
         maxAllowed: entitlement.maxAllowed,
@@ -112,7 +119,7 @@ export const createWebsite = async (
       return;
     }
 
-    const { name, slug, description, status, settings } = req.body;
+    const { name, slug, description, status, settings, templateId } = req.body;
     const finalName = String(name || "").trim();
 
     if (!finalName) {
@@ -126,6 +133,19 @@ export const createWebsite = async (
         message: "Invalid slug format. Please use letters, numbers, and hyphens.",
       });
       return;
+    }
+
+    // Backend template access entitlement check
+    const chosenTemplateId = resolveTemplateId(templateId || "minimal-clean");
+    if (isTemplatePremium(chosenTemplateId)) {
+      const user = await User.findById(userId);
+      if (!canUserAccessTemplate(user, chosenTemplateId)) {
+        res.status(403).json({
+          message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
+          premiumRequired: true,
+        });
+        return;
+      }
     }
 
     // Check if slug is already taken
@@ -143,18 +163,21 @@ export const createWebsite = async (
       description: description || "",
       owner: userId,
       status: status === "published" ? "published" : "draft",
+      templateId: chosenTemplateId,
       settings: settings || {},
     });
 
-    // Auto-create initial home page for the new website
+    // Auto-create initial home page with chosen template components
+    const initialComponents = getDefaultComponentsForTemplate(chosenTemplateId, finalName);
     const homePage = await Content.create({
       title: `${finalName} Home`,
       slug: cleanSlug === "home" ? `home-${Date.now().toString().slice(-4)}` : cleanSlug,
-      content: JSON.stringify([]),
+      content: JSON.stringify(initialComponents),
       type: "page",
       status: status === "published" ? "published" : "draft",
       author: userId,
       website: newWebsite._id,
+      templateId: chosenTemplateId,
     });
 
     newWebsite.homePage = homePage._id as any;
@@ -260,7 +283,22 @@ export const updateWebsite = async (
       return;
     }
 
-    const { name, slug, description, status, homePage, settings } = req.body;
+    const { name, slug, description, status, homePage, settings, templateId } = req.body;
+
+    if (templateId !== undefined && templateId) {
+      const chosenTemplateId = resolveTemplateId(templateId);
+      if (isTemplatePremium(chosenTemplateId)) {
+        const user = await User.findById(userId);
+        if (!canUserAccessTemplate(user, chosenTemplateId)) {
+          res.status(403).json({
+            message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
+            premiumRequired: true,
+          });
+          return;
+        }
+      }
+      website.templateId = chosenTemplateId;
+    }
 
     if (slug) {
       const cleanSlug = normalizeWebsiteSlug(slug);
@@ -356,8 +394,25 @@ export const deleteWebsite = async (
       return;
     }
 
-    // Unlink any pages associated with this website
-    await Content.updateMany({ website: id }, { $unset: { website: 1 } });
+    // Unlink any pages associated with this website without causing index collisions
+    const sitePages = await Content.find({ website: id });
+    for (const page of sitePages) {
+      try {
+        page.website = undefined;
+        const collision = await Content.findOne({
+          $or: [{ website: null }, { website: { $exists: false } }],
+          slug: page.slug,
+          _id: { $ne: page._id },
+        });
+        if (collision) {
+          page.slug = `${page.slug}-${Date.now().toString().slice(-4)}`;
+        }
+        await page.save();
+      } catch (e) {
+        // Fallback: delete orphan page if it cannot be unlinked cleanly
+        await Content.findByIdAndDelete(page._id).catch(() => null);
+      }
+    }
 
     await Website.findByIdAndDelete(id);
 

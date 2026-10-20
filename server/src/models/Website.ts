@@ -8,6 +8,7 @@ export interface IWebsite extends Document {
     owner: mongoose.Types.ObjectId;
     status: "draft" | "published";
     homePage?: mongoose.Types.ObjectId;
+    templateId?: string;
     settings?: {
         favicon?: string;
         metaTitle?: string;
@@ -54,6 +55,12 @@ const websiteSchema = new Schema<IWebsite>(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Content",
             default: undefined,
+        },
+
+        templateId: {
+            type: String,
+            default: "minimal-clean",
+            trim: true,
         },
 
         settings: {

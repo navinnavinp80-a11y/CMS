@@ -7,9 +7,11 @@ interface HeroBlockProps {
 
 export function HeroBlock({ component, isPreviewMode }: HeroBlockProps) {
   const url = component.buttonUrl || "#";
+  const variantClass = component.variant ? `variant-${component.variant}` : "";
 
   return (
-    <section className="preview-hero">
+    <section className={`preview-hero ${variantClass}`}>
+      {component.badge && <div className="hero-pill-badge">{component.badge}</div>}
       <h1>{component.title}</h1>
       <p>{component.subtitle}</p>
       {isPreviewMode && url && url !== "#" ? (

@@ -7,10 +7,11 @@ interface ButtonBlockProps {
 
 export function ButtonBlock({ component, isPreviewMode }: ButtonBlockProps) {
   const url = component.buttonUrl || "#";
+  const variantClass = component.variant ? `variant-${component.variant}` : "";
 
   if (isPreviewMode && url && url !== "#") {
     return (
-      <section className="preview-button">
+      <section className={`preview-button ${variantClass}`}>
         <a
           href={url}
           className="button-link-btn"
@@ -24,7 +25,7 @@ export function ButtonBlock({ component, isPreviewMode }: ButtonBlockProps) {
   }
 
   return (
-    <section className="preview-button">
+    <section className={`preview-button ${variantClass}`}>
       <button type="button" onClick={(e) => e.preventDefault()}>
         {component.buttonText || "Button"}
       </button>

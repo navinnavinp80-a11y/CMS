@@ -1,12 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireCreationEntitlement = exports.requireStoreCreationEntitlement = exports.requireWebsiteCreationEntitlement = void 0;
+exports.requireStoreCreationEntitlement = exports.requireCreationEntitlement = exports.requireWebsiteCreationEntitlement = void 0;
 const entitlementService_1 = require("../services/entitlementService");
 /**
- * Express middleware to enforce Free/Premium creation limits before creating a new website.
- * - Maximum of 2 websites for Free plan.
- * - Starting from the 3rd website, block creation unless user has an active Premium plan.
- * - Does not block content pages, edits, or publishing.
+ * Express middleware to enforce Free/Premium website creation limits before creating a new website.
+ * - Allows 2 websites on Free plan (owned by authenticated user).
+ * - Blocks 3rd creation on Free plan with exact required message.
+ * - Allows unlimited creations for active Premium users.
  */
 const requireWebsiteCreationEntitlement = async (req, res, next) => {
     try {
@@ -32,7 +32,7 @@ const requireWebsiteCreationEntitlement = async (req, res, next) => {
         next();
     }
     catch (error) {
-        console.error("Website creation entitlement middleware error:", error);
+        console.error("Website plan entitlement middleware error:", error);
         res.status(500).json({
             message: "Server error verifying plan entitlements",
         });
@@ -40,7 +40,11 @@ const requireWebsiteCreationEntitlement = async (req, res, next) => {
 };
 exports.requireWebsiteCreationEntitlement = requireWebsiteCreationEntitlement;
 /**
- * Express middleware to enforce Free/Premium store creation limits.
+ * General creation entitlement middleware for websites and stores.
+ */
+exports.requireCreationEntitlement = exports.requireWebsiteCreationEntitlement;
+/**
+ * Express middleware to enforce store creation limits.
  */
 const requireStoreCreationEntitlement = async (req, res, next) => {
     try {
@@ -66,14 +70,10 @@ const requireStoreCreationEntitlement = async (req, res, next) => {
         next();
     }
     catch (error) {
-        console.error("Store creation entitlement middleware error:", error);
+        console.error("Store plan entitlement middleware error:", error);
         res.status(500).json({
             message: "Server error verifying plan entitlements",
         });
     }
 };
 exports.requireStoreCreationEntitlement = requireStoreCreationEntitlement;
-/**
- * Backwards compatibility alias
- */
-exports.requireCreationEntitlement = exports.requireWebsiteCreationEntitlement;
