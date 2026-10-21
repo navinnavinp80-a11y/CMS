@@ -16,6 +16,8 @@ import PublicPageViewer from "./pages/PublicPageViewer/PublicPageViewer";
 import Stores from "./pages/Stores/Stores";
 import StoreEditor from "./pages/StoreEditor/StoreEditor";
 import PublicStorefront from "./pages/PublicStorefront/PublicStorefront";
+import PremiumPayment from "./pages/Premium/PremiumPayment";
+
 
 function NotFound() {
   const token = localStorage.getItem("token");
@@ -254,6 +256,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <StoreEditor />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/premium"
+            element={
+              <ProtectedRoute>
+                <PremiumPayment />
               </ProtectedRoute>
             }
           />

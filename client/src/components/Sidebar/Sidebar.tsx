@@ -178,7 +178,7 @@ export default function Sidebar({
           <div className="sidebar-footer-container">
             <div
               className="upgrade-plan-card"
-              onClick={() => handleNavigate("/settings")}
+              onClick={() => handleNavigate("/premium")}
               role="button"
               tabIndex={0}
             >

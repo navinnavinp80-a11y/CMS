@@ -20,6 +20,7 @@ const publicStoreRoutes_1 = __importDefault(require("./routes/publicStoreRoutes"
 const websiteRoutes_1 = __importDefault(require("./routes/websiteRoutes"));
 const planRoutes_1 = __importDefault(require("./routes/planRoutes"));
 const templateRoutes_1 = __importDefault(require("./routes/templateRoutes"));
+const paymentRoutes_1 = __importDefault(require("./routes/paymentRoutes"));
 dns_1.default.setServers(["8.8.8.8", "1.1.1.1"]);
 dotenv_1.default.config();
 const app = (0, express_1.default)();
@@ -38,6 +39,7 @@ app.use("/api/public/store", publicStoreRoutes_1.default);
 app.use("/api/websites", websiteRoutes_1.default);
 app.use("/api/plan", planRoutes_1.default);
 app.use("/api/templates", templateRoutes_1.default);
+app.use("/api/payments", paymentRoutes_1.default);
 const PORT = process.env.PORT || 5000;
 app.get("/", (req, res) => {
     res.json({
