@@ -30,6 +30,7 @@ import { StorefrontRenderer } from "./StorefrontRenderer";
 import { SectionsListPanel } from "./SectionsListPanel";
 import { SectionSettingsPanel } from "./SectionSettingsPanel";
 import { ThemeSettingsPanel } from "./ThemeSettingsPanel";
+import { getThemeById } from "../../themes/registry";
 import "./StoreEditor.css";
 
 interface EditorSnapshot {
@@ -51,6 +52,7 @@ export default function StoreEditor() {
   const [currentStoreId, setCurrentStoreId] = useState<string | null>(storeId || null);
   const [storeName, setStoreName] = useState<string>("My Store");
   const [slug, setSlug] = useState<string>("");
+  const [themeId, setThemeId] = useState<string>("electronics-store");
   const [status, setStatus] = useState<"draft" | "published">("draft");
   const [sections, setSections] = useState<StoreSection[]>([]);
   const [theme, setTheme] = useState<StoreTheme>(DEFAULT_THEME);
@@ -158,6 +160,7 @@ export default function StoreEditor() {
 
           setStoreName(loadedName);
           setSlug(loadedSlug);
+          setThemeId(data.themeId || "electronics-store");
           setStatus(data.status || "draft");
           setSections(loadedSections);
           setTheme(loadedTheme);
@@ -282,6 +285,7 @@ export default function StoreEditor() {
         updated = await updateStore(currentStoreId, {
           storeName,
           slug: slug || undefined,
+          themeId,
           sections,
           theme,
         });
@@ -330,6 +334,7 @@ export default function StoreEditor() {
         updated = await publishStoreById(currentStoreId, {
           storeName,
           slug: slug || undefined,
+          themeId,
           sections,
           theme,
         });
@@ -417,9 +422,8 @@ export default function StoreEditor() {
             </span>
           )}
           <span
-            className={`store-editor-status ${
-              status === "published" ? "status-published" : "status-draft"
-            }`}
+            className={`store-editor-status ${status === "published" ? "status-published" : "status-draft"
+              }`}
           >
             {status === "published" ? "Live • Published" : "Draft"}
           </span>
@@ -444,9 +448,8 @@ export default function StoreEditor() {
           {/* Desktop/Mobile Viewport Toggles */}
           <button
             type="button"
-            className={`store-editor-icon-button ${
-              previewMode === "desktop" ? "active" : ""
-            }`}
+            className={`store-editor-icon-button ${previewMode === "desktop" ? "active" : ""
+              }`}
             title="Desktop preview mode"
             onClick={() => setPreviewMode("desktop")}
           >
@@ -455,9 +458,8 @@ export default function StoreEditor() {
 
           <button
             type="button"
-            className={`store-editor-icon-button ${
-              previewMode === "mobile" ? "active" : ""
-            }`}
+            className={`store-editor-icon-button ${previewMode === "mobile" ? "active" : ""
+              }`}
             title="Mobile preview mode"
             onClick={() => setPreviewMode("mobile")}
           >
@@ -539,11 +541,10 @@ export default function StoreEditor() {
       {/* Global Status Notification Banner */}
       {statusMessage && (
         <div
-          className={`store-editor-toast ${
-            saveStatus === "error" || publishStatus === "error"
+          className={`store-editor-toast ${saveStatus === "error" || publishStatus === "error"
               ? "toast-error"
               : "toast-success"
-          }`}
+            }`}
         >
           {saveStatus === "error" || publishStatus === "error" ? (
             <AlertCircle size={16} />
@@ -561,9 +562,8 @@ export default function StoreEditor() {
           <div className="sidebar-tab-switcher">
             <button
               type="button"
-              className={`sidebar-tab-btn ${
-                sidebarTab === "sections" ? "active" : ""
-              }`}
+              className={`sidebar-tab-btn ${sidebarTab === "sections" ? "active" : ""
+                }`}
               onClick={() => {
                 setSidebarTab("sections");
               }}
@@ -574,9 +574,8 @@ export default function StoreEditor() {
 
             <button
               type="button"
-              className={`sidebar-tab-btn ${
-                sidebarTab === "theme" ? "active" : ""
-              }`}
+              className={`sidebar-tab-btn ${sidebarTab === "theme" ? "active" : ""
+                }`}
               onClick={() => {
                 setSidebarTab("theme");
                 setSelectedSectionId(null);
@@ -646,9 +645,8 @@ export default function StoreEditor() {
           </div>
 
           <div
-            className={`store-editor-canvas-container ${
-              previewMode === "mobile" ? "mobile-viewport-container" : ""
-            }`}
+            className={`store-editor-canvas-container ${previewMode === "mobile" ? "mobile-viewport-container" : ""
+              }`}
           >
             {previewMode === "mobile" && (
               <div className="mobile-phone-speaker-notch">
@@ -656,32 +654,39 @@ export default function StoreEditor() {
               </div>
             )}
 
-            <div
-              className={`store-editor-storefront ${
-                previewMode === "mobile" ? "mobile-preview" : ""
-              }`}
-              style={{
-                maxWidth:
-                  previewMode === "mobile"
-                    ? "390px"
-                    : theme.contentWidth === "compact"
-                    ? "1000px"
-                    : theme.contentWidth === "full"
-                    ? "1440px"
-                    : "1200px",
-              }}
-            >
-              <StorefrontRenderer
-                sections={sections}
-                theme={theme}
-                selectedSectionId={selectedSectionId}
-                onSelectSection={(id) => {
-                  setSelectedSectionId(id);
-                  setSidebarTab("sections");
-                }}
-                isEditor={true}
-              />
-            </div>
+            {(() => {
+              const themeEntry = getThemeById(themeId);
+              const ThemeComponent = themeEntry.component || StorefrontRenderer;
+
+              return (
+                <div
+                  className={`store-editor-storefront theme-${themeEntry.slug} ${
+                    previewMode === "mobile" ? "mobile-preview" : ""
+                  }`}
+                  style={{
+                    maxWidth:
+                      previewMode === "mobile"
+                        ? "390px"
+                        : theme.contentWidth === "compact"
+                          ? "1000px"
+                          : theme.contentWidth === "full"
+                            ? "1440px"
+                            : "1200px",
+                  }}
+                >
+                  <ThemeComponent
+                    sections={sections}
+                    theme={theme}
+                    selectedSectionId={selectedSectionId}
+                    onSelectSection={(id: string) => {
+                      setSelectedSectionId(id);
+                      setSidebarTab("sections");
+                    }}
+                    isEditor={true}
+                  />
+                </div>
+              );
+            })()}
           </div>
         </main>
       </div>

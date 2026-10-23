@@ -3,11 +3,13 @@ import { Link, useParams } from "react-router-dom";
 import { getPublicStoreConfig } from "../../services/api";
 import type { StoreSectionData, StoreThemeData } from "../../services/api";
 import { StorefrontRenderer } from "../StoreEditor/StorefrontRenderer";
+import { getThemeById } from "../../themes/registry";
 import { ShoppingBag, ArrowLeft, AlertCircle } from "lucide-react";
 import "./PublicStorefront.css";
 
 interface PublishedStoreState {
   storeName: string;
+  themeId?: string;
   sections: StoreSectionData[];
   theme: StoreThemeData;
   publishedAt?: string;
@@ -106,9 +108,12 @@ export default function PublicStorefront() {
     );
   }
 
+  const themeEntry = getThemeById(storeData.themeId);
+  const ThemeComponent = themeEntry.component || StorefrontRenderer;
+
   return (
-    <main className="public-storefront-wrapper">
-      <StorefrontRenderer
+    <main className={`public-storefront-wrapper theme-${themeEntry.slug}`}>
+      <ThemeComponent
         sections={storeData.sections as any}
         theme={storeData.theme as any}
         isEditor={false}

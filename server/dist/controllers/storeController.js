@@ -3,9 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.publishStoreConfig = exports.saveDraftStoreConfig = exports.getStoreConfig = exports.getPublicStoreConfig = exports.getPublicStoreConfigBySlug = exports.publishStore = exports.deleteStore = exports.updateStore = exports.getStoreById = exports.createStore = exports.getStores = exports.normalizeSlug = exports.getDefaultSections = exports.getDefaultTheme = void 0;
+exports.getStoreThemes = exports.publishStoreConfig = exports.saveDraftStoreConfig = exports.getStoreConfig = exports.getPublicStoreConfig = exports.getPublicStoreConfigBySlug = exports.publishStore = exports.deleteStore = exports.updateStore = exports.getStoreById = exports.createStore = exports.getStores = exports.normalizeSlug = exports.getDefaultSections = exports.getDefaultTheme = void 0;
 const StoreConfig_1 = __importDefault(require("../models/StoreConfig"));
+const User_1 = __importDefault(require("../models/User"));
 const entitlementService_1 = require("../services/entitlementService");
+const storeThemeService_1 = require("../services/storeThemeService");
 const getDefaultTheme = () => ({
     primaryColor: "#202223",
     secondaryColor: "#4f46e5",
@@ -183,7 +185,7 @@ const createStore = async (req, res) => {
             });
             return;
         }
-        const { storeName, name, slug } = req.body;
+        const { storeName, name, slug, themeId } = req.body;
         const finalName = (storeName || name || "").trim();
         if (!finalName) {
             res.status(400).json({ message: "Store name is required" });
@@ -204,14 +206,33 @@ const createStore = async (req, res) => {
             res.status(400).json({ message: `The store URL / slug "${cleanSlug}" is already in use. Please choose another.` });
             return;
         }
+        // Secure theme validation & entitlement verification
+        const targetThemeId = (themeId && typeof themeId === "string" && themeId.trim())
+            ? themeId.trim().toLowerCase()
+            : storeThemeService_1.DEFAULT_THEME_ID;
+        const user = await User_1.default.findById(userId);
+        const hasThemeAccess = (0, storeThemeService_1.canUserAccessTheme)(user, targetThemeId);
+        if (!hasThemeAccess) {
+            const themeDef = storeThemeService_1.SERVER_STORE_THEMES[targetThemeId];
+            const themeDisplayName = themeDef ? themeDef.name : targetThemeId;
+            res.status(403).json({
+                message: `Theme "${themeDisplayName}" is exclusive to Premium subscribers. Upgrade your account to unlock this theme.`,
+                themeLocked: true,
+                themeId: targetThemeId,
+                requiresPremium: true,
+            });
+            return;
+        }
+        const themeDefaults = (0, storeThemeService_1.getThemeDefaults)(targetThemeId, finalName);
         const newStore = await StoreConfig_1.default.create({
             owner: userId,
             storeName: finalName,
             name: finalName,
             slug: cleanSlug,
+            themeId: themeDefaults.themeId,
             status: "draft",
-            sections: (0, exports.getDefaultSections)(finalName),
-            theme: (0, exports.getDefaultTheme)(),
+            sections: req.body.sections || themeDefaults.sections,
+            theme: req.body.theme || themeDefaults.theme,
         });
         res.status(201).json({
             message: "Store created successfully",
@@ -250,7 +271,7 @@ const getStoreById = async (req, res) => {
         const storeOwnerId = store.owner?._id
             ? store.owner._id.toString()
             : store.owner?.toString();
-        if (storeOwnerId && storeOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!storeOwnerId || storeOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to access this store" });
             return;
         }
@@ -287,11 +308,28 @@ const updateStore = async (req, res) => {
         const storeOwnerId = store.owner?._id
             ? store.owner._id.toString()
             : store.owner?.toString();
-        if (storeOwnerId && storeOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!storeOwnerId || storeOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to modify this store" });
             return;
         }
-        const { storeName, name, slug, sections, theme, status } = req.body;
+        const { storeName, name, slug, themeId, sections, theme, status } = req.body;
+        if (themeId !== undefined && themeId !== store.themeId) {
+            const cleanThemeId = String(themeId).trim().toLowerCase();
+            const user = await User_1.default.findById(userId);
+            const hasThemeAccess = (0, storeThemeService_1.canUserAccessTheme)(user, cleanThemeId);
+            if (!hasThemeAccess) {
+                const themeDef = storeThemeService_1.SERVER_STORE_THEMES[cleanThemeId];
+                const themeDisplayName = themeDef ? themeDef.name : cleanThemeId;
+                res.status(403).json({
+                    message: `Theme "${themeDisplayName}" is exclusive to Premium subscribers. Upgrade your account to unlock this theme.`,
+                    themeLocked: true,
+                    themeId: cleanThemeId,
+                    requiresPremium: true,
+                });
+                return;
+            }
+            store.themeId = cleanThemeId;
+        }
         if (slug) {
             const cleanSlug = (0, exports.normalizeSlug)(slug);
             if (!cleanSlug) {
@@ -364,7 +402,7 @@ const deleteStore = async (req, res) => {
         const storeOwnerId = store.owner?._id
             ? store.owner._id.toString()
             : store.owner?.toString();
-        if (storeOwnerId && storeOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!storeOwnerId || storeOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to delete this store" });
             return;
         }
@@ -400,7 +438,7 @@ const publishStore = async (req, res) => {
         const storeOwnerId = store.owner?._id
             ? store.owner._id.toString()
             : store.owner?.toString();
-        if (storeOwnerId && storeOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!storeOwnerId || storeOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to publish this store" });
             return;
         }
@@ -435,6 +473,7 @@ const publishStore = async (req, res) => {
         store.status = "published";
         store.publishedVersion = {
             storeName: store.storeName,
+            themeId: store.themeId || "electronics-store",
             sections: store.sections,
             theme: store.theme,
             publishedAt: new Date(),
@@ -475,6 +514,7 @@ const getPublicStoreConfigBySlug = async (req, res) => {
                 _id: store._id,
                 storeName: store.publishedVersion.storeName || store.storeName,
                 slug: store.slug,
+                themeId: store.publishedVersion.themeId || store.themeId || "electronics-store",
                 sections: store.publishedVersion.sections || store.sections,
                 theme: store.publishedVersion.theme || store.theme,
                 publishedAt: store.publishedVersion.publishedAt,
@@ -511,6 +551,7 @@ const getPublicStoreConfig = async (req, res) => {
                 _id: config._id,
                 storeName: config.publishedVersion.storeName || config.storeName,
                 slug: config.slug,
+                themeId: config.publishedVersion.themeId || config.themeId || "electronics-store",
                 sections: config.publishedVersion.sections || config.sections,
                 theme: config.publishedVersion.theme || config.theme,
                 publishedAt: config.publishedVersion.publishedAt,
@@ -582,9 +623,14 @@ const saveDraftStoreConfig = async (req, res) => {
         let config = null;
         if (targetId) {
             config = await StoreConfig_1.default.findById(targetId);
-            if (config && config.owner.toString() !== userId && req.user?.role !== "admin") {
-                res.status(403).json({ message: "Unauthorized" });
-                return;
+            if (config) {
+                const storeOwnerId = config.owner?._id
+                    ? config.owner._id.toString()
+                    : config.owner?.toString();
+                if (req.user?.role !== "admin" && (!storeOwnerId || storeOwnerId !== userId)) {
+                    res.status(403).json({ message: "Unauthorized" });
+                    return;
+                }
             }
         }
         else {
@@ -650,9 +696,14 @@ const publishStoreConfig = async (req, res) => {
         let config = null;
         if (targetId) {
             config = await StoreConfig_1.default.findById(targetId);
-            if (config && config.owner.toString() !== userId && req.user?.role !== "admin") {
-                res.status(403).json({ message: "Unauthorized" });
-                return;
+            if (config) {
+                const storeOwnerId = config.owner?._id
+                    ? config.owner._id.toString()
+                    : config.owner?.toString();
+                if (req.user?.role !== "admin" && (!storeOwnerId || storeOwnerId !== userId)) {
+                    res.status(403).json({ message: "Unauthorized" });
+                    return;
+                }
             }
         }
         else {
@@ -694,6 +745,7 @@ const publishStoreConfig = async (req, res) => {
         config.status = "published";
         config.publishedVersion = {
             storeName: config.storeName,
+            themeId: config.themeId || "electronics-store",
             sections: config.sections,
             theme: config.theme,
             publishedAt: new Date(),
@@ -710,3 +762,25 @@ const publishStoreConfig = async (req, res) => {
     }
 };
 exports.publishStoreConfig = publishStoreConfig;
+/**
+ * GET /api/store/themes
+ * Returns all store themes with verified entitlement flag for the authenticated user.
+ */
+const getStoreThemes = async (req, res) => {
+    try {
+        let user = null;
+        if (req.user?.id) {
+            user = await User_1.default.findById(req.user.id);
+        }
+        const themes = (0, storeThemeService_1.getAvailableStoreThemes)(user);
+        res.status(200).json({
+            message: "Store themes fetched successfully",
+            themes,
+        });
+    }
+    catch (error) {
+        console.error("Get store themes error:", error);
+        res.status(500).json({ message: "Server error fetching store themes" });
+    }
+};
+exports.getStoreThemes = getStoreThemes;

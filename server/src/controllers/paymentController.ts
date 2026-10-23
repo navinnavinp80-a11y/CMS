@@ -88,7 +88,10 @@ export const verifyPremiumPayment = async (
     }
 
     const payment = await Payment.findOne({
-      razorpayOrderId: razorpay_order_id,
+      $or: [
+        { razorpayOrderId: razorpay_order_id },
+        { orderId: razorpay_order_id },
+      ],
       user: userId,
     });
 
@@ -123,13 +126,15 @@ export const verifyPremiumPayment = async (
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
-    const received = Buffer.from(razorpay_signature, "hex");
-    const expected = Buffer.from(expectedSignature, "hex");
+    const isSignatureValid =
+      typeof razorpay_signature === "string" &&
+      razorpay_signature.length === expectedSignature.length &&
+      crypto.timingSafeEqual(
+        Buffer.from(razorpay_signature, "utf-8"),
+        Buffer.from(expectedSignature, "utf-8")
+      );
 
-    if (
-      received.length !== expected.length ||
-      !crypto.timingSafeEqual(received, expected)
-    ) {
+    if (!isSignatureValid) {
       res.status(400).json({
         success: false,
         message: "Invalid payment signature.",
@@ -137,11 +142,19 @@ export const verifyPremiumPayment = async (
       return;
     }
 
-
     const razorpay = (await import("../services/paymentService")).default;
-    const razorpayPayment = await razorpay.payments.fetch(
+    let razorpayPayment = await razorpay.payments.fetch(
       razorpay_payment_id
     );
+
+    // If payment is in authorized state, capture it to finalize payment
+    if (razorpayPayment.status === "authorized") {
+      razorpayPayment = await razorpay.payments.capture(
+        razorpay_payment_id,
+        payment.amount,
+        payment.currency
+      );
+    }
 
     if (
       razorpayPayment.order_id !== razorpay_order_id ||
@@ -156,12 +169,6 @@ export const verifyPremiumPayment = async (
       return;
     }
 
-    // Update the payment record only after server-side verification.
-    payment.razorpayPaymentId = razorpay_payment_id;
-    payment.status = "paid";
-    payment.premiumExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await payment.save();
-
     // Extend an existing active Premium plan; otherwise start from now.
     const user = await User.findById(userId);
 
@@ -173,6 +180,9 @@ export const verifyPremiumPayment = async (
       return;
     }
 
+    const durationDays = Number(process.env.PREMIUM_PLAN_DURATION_DAYS) || 30;
+    const durationMs = durationDays * 24 * 60 * 60 * 1000;
+
     const now = new Date();
     const currentExpiry = user.premiumExpiresAt
       ? new Date(user.premiumExpiresAt)
@@ -183,14 +193,19 @@ export const verifyPremiumPayment = async (
         ? currentExpiry
         : now;
 
-    const expiresAt = new Date(
-      startsFrom.getTime() + 30 * 24 * 60 * 60 * 1000
-    );
+    const expiresAt = new Date(startsFrom.getTime() + durationMs);
 
+    // Update user entitlement
     user.plan = "premium";
     user.premiumExpiresAt = expiresAt;
     await user.save();
 
+    // Update the payment record only after server-side verification succeeds
+    payment.razorpayPaymentId = razorpay_payment_id;
+    payment.paymentId = razorpay_payment_id;
+    payment.signature = razorpay_signature;
+    payment.status = "paid";
+    payment.durationDays = durationDays;
     payment.premiumExpiresAt = expiresAt;
     await payment.save();
 
@@ -200,6 +215,14 @@ export const verifyPremiumPayment = async (
       data: {
         plan: user.plan,
         premiumExpiresAt: user.premiumExpiresAt,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          plan: user.plan,
+          premiumExpiresAt: user.premiumExpiresAt,
+        },
       },
     });
   } catch (error) {

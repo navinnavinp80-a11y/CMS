@@ -11,10 +11,19 @@ import {
     Store as StoreIcon,
     AlertCircle,
     CheckCircle,
+    Lock,
+    Crown,
+    Check,
 } from "lucide-react";
 import AdminLayout from "../../components/Layout/AdminLayout";
 import { getStores, createStore, deleteStore } from "../../services/api";
 import type { StoreItem } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
+import {
+    getAllThemes,
+    isThemePremium,
+    DEFAULT_STORE_THEME_ID,
+} from "../../themes/registry";
 import "./Stores.css";
 
 const normalizeSlug = (text: string): string => {
@@ -40,6 +49,7 @@ const formatDate = (dateString?: string): string => {
 
 export default function Stores() {
     const navigate = useNavigate();
+    const { isPremium } = useAuth();
 
     // Stores data state
     const [stores, setStores] = useState<StoreItem[]>([]);
@@ -55,6 +65,7 @@ export default function Stores() {
     const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
     const [newStoreName, setNewStoreName] = useState<string>("");
     const [newStoreSlug, setNewStoreSlug] = useState<string>("");
+    const [selectedThemeId, setSelectedThemeId] = useState<string>(DEFAULT_STORE_THEME_ID);
     const [slugManuallyEdited, setSlugManuallyEdited] = useState<boolean>(false);
     const [creating, setCreating] = useState<boolean>(false);
     const [createError, setCreateError] = useState<string>("");
@@ -134,6 +145,7 @@ export default function Stores() {
     const handleOpenCreateModal = () => {
         setNewStoreName("");
         setNewStoreSlug("");
+        setSelectedThemeId(DEFAULT_STORE_THEME_ID);
         setSlugManuallyEdited(false);
         setCreateError("");
         setShowCreateModal(true);
@@ -165,11 +177,13 @@ export default function Stores() {
             const createdStore = await createStore({
                 storeName: trimmedName,
                 slug: cleanSlug,
+                themeId: selectedThemeId,
             });
 
             setShowCreateModal(false);
             setNewStoreName("");
             setNewStoreSlug("");
+            setSelectedThemeId(DEFAULT_STORE_THEME_ID);
             setSlugManuallyEdited(false);
 
             // Navigate straight to the store editor for this new store
@@ -492,7 +506,7 @@ export default function Stores() {
                         onClick={handleCloseCreateModal}
                     >
                         <div
-                            className="stores-modal-dialog"
+                            className="stores-modal-dialog create-store-modal"
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div className="stores-modal-header">
@@ -502,7 +516,7 @@ export default function Stores() {
                                     </div>
                                     <div>
                                         <h2>Create New Store</h2>
-                                        <p>Set up a storefront with your custom name and URL slug.</p>
+                                        <p>Select your storefront theme and enter your store name.</p>
                                     </div>
                                 </div>
                                 <button
@@ -519,9 +533,22 @@ export default function Stores() {
                             <form onSubmit={handleCreateSubmit}>
                                 <div className="stores-modal-body">
                                     {createError && (
-                                        <div className="stores-form-error">{createError}</div>
+                                        <div className="stores-form-error" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                            <span>{createError}</span>
+                                            {createError.toLowerCase().includes("premium") && (
+                                                <button
+                                                    type="button"
+                                                    className="theme-upgrade-btn"
+                                                    style={{ alignSelf: "flex-start", marginTop: "4px" }}
+                                                    onClick={() => navigate("/premium")}
+                                                >
+                                                    Upgrade to Premium
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
 
+                                    {/* Store Details Input Group */}
                                     <div className="stores-form-group">
                                         <label htmlFor="modal-store-name">
                                             Store Name <span className="required-star">*</span>
@@ -557,6 +584,83 @@ export default function Stores() {
                                             The public URL where your storefront will be accessible.
                                             Use lowercase letters, numbers, and hyphens.
                                         </span>
+                                    </div>
+
+                                    {/* Theme Selection Grid */}
+                                    <div className="stores-form-group theme-picker-section">
+                                        <div className="theme-picker-header">
+                                            <label>
+                                                Select Storefront Theme <span className="required-star">*</span>
+                                            </label>
+                                            <span className="theme-picker-hint">
+                                                {isPremium
+                                                    ? "All themes unlocked on your active Premium plan"
+                                                    : "Free plan includes Electronics Store & Phone Accessories Store"}
+                                            </span>
+                                        </div>
+
+                                        <div className="theme-picker-grid">
+                                            {getAllThemes().map((themeItem) => {
+                                                const isLocked = isThemePremium(themeItem.id) && !isPremium;
+                                                const isSelected = selectedThemeId === themeItem.id;
+
+                                                return (
+                                                    <div
+                                                        key={themeItem.id}
+                                                        className={`theme-picker-card ${isSelected ? "is-selected" : ""} ${isLocked ? "is-locked" : ""}`}
+                                                        onClick={() => {
+                                                            if (!isLocked) {
+                                                                setSelectedThemeId(themeItem.id);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className="theme-card-preview">
+                                                            <img
+                                                                src={themeItem.previewImage}
+                                                                alt={`${themeItem.name} preview`}
+                                                            />
+                                                            <span className={`theme-badge-pill ${themeItem.accessLevel}`}>
+                                                                {themeItem.accessLevel === "premium" && <Crown size={11} />}
+                                                                <span>{themeItem.accessLevel === "premium" ? "Premium" : "Free"}</span>
+                                                            </span>
+
+                                                            {isSelected && !isLocked && (
+                                                                <div className="theme-selected-check">
+                                                                    <Check size={14} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="theme-card-info">
+                                                            <div className="theme-card-title-row">
+                                                                <h4 className="theme-card-name">{themeItem.name}</h4>
+                                                                <span className="theme-card-category">{themeItem.category}</span>
+                                                            </div>
+                                                            <p className="theme-card-desc">{themeItem.description}</p>
+
+                                                            {isLocked && (
+                                                                <div className="theme-lock-overlay-bar">
+                                                                    <div className="theme-lock-text-group">
+                                                                        <Lock size={13} />
+                                                                        <span>Premium Only</span>
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="theme-upgrade-btn"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            navigate("/premium");
+                                                                        }}
+                                                                    >
+                                                                        Upgrade to Premium
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
 

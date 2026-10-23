@@ -8,6 +8,7 @@ import {
     Sparkles,
 } from "lucide-react";
 import AdminLayout from "../../components/Layout/AdminLayout";
+import { useAuth } from "../../context/AuthContext";
 
 interface RazorpaySuccessResponse {
     razorpay_order_id: string;
@@ -60,6 +61,18 @@ interface OrderResponse {
 interface VerifyResponse {
     success: boolean;
     message?: string;
+    data?: {
+        plan: "free" | "premium";
+        premiumExpiresAt: string;
+        user?: {
+            id?: string;
+            name?: string;
+            email?: string;
+            role?: string;
+            plan?: "free" | "premium";
+            premiumExpiresAt?: string | null;
+        };
+    };
 }
 
 declare global {
@@ -70,6 +83,7 @@ declare global {
 
 export default function PremiumPayment() {
     const navigate = useNavigate();
+    const { user, isPremium, refreshUser, updateUser } = useAuth();
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState("");
 
@@ -176,6 +190,19 @@ export default function PremiumPayment() {
                             );
                             return;
                         }
+
+                        // Update local auth state with verified entitlement from backend
+                        if (verifyResult.data?.user) {
+                            updateUser(verifyResult.data.user);
+                        } else if (verifyResult.data?.plan) {
+                            updateUser({
+                                plan: verifyResult.data.plan,
+                                premiumExpiresAt: verifyResult.data.premiumExpiresAt,
+                            });
+                        }
+
+                        // Refresh authenticated user from the backend
+                        await refreshUser();
 
                         setMessage(
                             "Payment verified successfully! Your Premium plan is now active."
@@ -313,13 +340,36 @@ export default function PremiumPayment() {
                         ))}
                     </div>
 
+                    {isPremium && user?.premiumExpiresAt && (
+                        <div
+                            style={{
+                                marginTop: "24px",
+                                padding: "12px 16px",
+                                background: "#F0FDF4",
+                                border: "1px solid #BBF7D0",
+                                borderRadius: "10px",
+                                color: "#166534",
+                                fontSize: "14px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            <Sparkles size={16} />
+                            <span>
+                                <strong>Premium Active:</strong> Valid until{" "}
+                                {new Date(user.premiumExpiresAt).toLocaleDateString()}
+                            </span>
+                        </div>
+                    )}
+
                     <button
                         type="button"
                         onClick={handlePayment}
                         disabled={loading}
                         style={{
                             width: "100%",
-                            marginTop: "28px",
+                            marginTop: "24px",
                             padding: "14px",
                             border: "none",
                             borderRadius: "10px",
@@ -330,7 +380,7 @@ export default function PremiumPayment() {
                             cursor: loading ? "wait" : "pointer",
                         }}
                     >
-                        {loading ? "Processing..." : "Pay ₹399"}
+                        {loading ? "Processing..." : isPremium ? "Extend Subscription (₹399)" : "Pay ₹399"}
                     </button>
 
                     {message && (

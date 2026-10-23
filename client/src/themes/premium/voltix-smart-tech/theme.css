@@ -1,0 +1,197 @@
+/* ==========================================================================
+   Voltix Smart Tech Theme Styles
+   Access Level: PREMIUM
+   Category: Smart Technology, Smartphones, Smartwatches, Gaming Gear, Audio
+   Visual Style: Black/White Layouts with Vibrant High-Voltage Orange Accents
+   ========================================================================== */
+
+.theme-voltix-smart-tech {
+  --store-primary: #09090b; /* Pure Void Black */
+  --store-secondary: #ff6b00; /* High-Voltage Orange */
+  --store-accent: #f97316; /* Cyber Amber */
+  --store-bg: #09090b; /* Dark Base */
+  --store-card-bg: #121215;
+  --store-border: #27272a;
+  --store-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --store-btn-radius: 0px; /* Sharp High-Tech Square Corners */
+  font-family: var(--store-font);
+  background-color: #09090b;
+  color: #f4f4f5;
+}
+
+/* Announcement Bar */
+.theme-voltix-smart-tech .storefront-announcement {
+  background: #ff6b00 !important;
+  color: #000000 !important;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  border-bottom: 2px solid #000000;
+}
+
+.theme-voltix-smart-tech .announcement-link {
+  color: #000000 !important;
+}
+
+/* Header */
+.theme-voltix-smart-tech .storefront-header {
+  background: #09090b !important;
+  border-bottom: 1px solid #27272a;
+}
+
+.theme-voltix-smart-tech .storefront-brand-icon {
+  color: #ff6b00;
+}
+
+.theme-voltix-smart-tech .storefront-store-name {
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.theme-voltix-smart-tech .storefront-nav-link {
+  color: #a1a1aa;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  transition: color 0.2s ease;
+}
+
+.theme-voltix-smart-tech .storefront-nav-link:hover {
+  color: #ff6b00;
+}
+
+.theme-voltix-smart-tech .storefront-cart-btn {
+  background: #18181b;
+  border: 1px solid #27272a;
+  color: #ffffff;
+}
+
+.theme-voltix-smart-tech .cart-badge {
+  background: #ff6b00;
+  color: #000000;
+  font-weight: 800;
+}
+
+/* Hero */
+.theme-voltix-smart-tech .storefront-hero {
+  background: linear-gradient(180deg, #09090b 0%, #18181b 100%) !important;
+  border-bottom: 1px solid #27272a;
+  position: relative;
+}
+
+.theme-voltix-smart-tech .hero-title {
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
+}
+
+.theme-voltix-smart-tech .hero-subtitle {
+  color: #ff6b00 !important;
+  font-weight: 800 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.9rem !important;
+}
+
+.theme-voltix-smart-tech .hero-description {
+  color: #a1a1aa !important;
+}
+
+.theme-voltix-smart-tech .storefront-hero .storefront-btn-primary {
+  background: #ff6b00 !important;
+  color: #000000 !important;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: none;
+  box-shadow: 0 0 20px rgba(255, 107, 0, 0.4);
+}
+
+.theme-voltix-smart-tech .storefront-hero .storefront-btn-primary:hover {
+  background: #ea580c !important;
+  box-shadow: 0 0 30px rgba(255, 107, 0, 0.6);
+}
+
+/* Product Cards */
+.theme-voltix-smart-tech .storefront-products-section {
+  background: #09090b !important;
+  color: #ffffff !important;
+}
+
+.theme-voltix-smart-tech .section-heading {
+  color: #ffffff !important;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.theme-voltix-smart-tech .storefront-product-card {
+  background: #121215;
+  border: 1px solid #27272a;
+  border-radius: 0px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-voltix-smart-tech .storefront-product-card:hover {
+  transform: translateY(-6px);
+  border-color: #ff6b00;
+  box-shadow: 0 12px 30px -8px rgba(255, 107, 0, 0.3);
+}
+
+.theme-voltix-smart-tech .product-title {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.theme-voltix-smart-tech .product-price {
+  color: #ff6b00;
+  font-weight: 800;
+}
+
+.theme-voltix-smart-tech .product-badge {
+  background: #ff6b00 !important;
+  color: #000000 !important;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  border-radius: 0px;
+}
+
+/* Image Banner & Rich Text */
+.theme-voltix-smart-tech .storefront-image-banner-inner {
+  border: 1px solid #27272a;
+}
+
+.theme-voltix-smart-tech .storefront-rich-text-section {
+  background: #121215 !important;
+  border-top: 1px solid #27272a;
+  border-bottom: 1px solid #27272a;
+  color: #f4f4f5 !important;
+}
+
+/* Newsletter & Footer */
+.theme-voltix-smart-tech .storefront-newsletter-section {
+  background: #09090b !important;
+  border-bottom: 1px solid #27272a;
+}
+
+.theme-voltix-smart-tech .storefront-footer {
+  background: #000000 !important;
+  border-top: 2px solid #ff6b00;
+  color: #a1a1aa;
+}
+
+.theme-voltix-smart-tech .footer-store-name {
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.theme-voltix-smart-tech .footer-link:hover {
+  color: #ff6b00;
+}

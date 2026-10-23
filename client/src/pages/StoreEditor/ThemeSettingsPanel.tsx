@@ -150,9 +150,8 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
             <div className="button-style-options">
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.buttonStyle === "square" ? "active" : ""
-                }`}
+                className={`style-option-btn ${theme.buttonStyle === "square" ? "active" : ""
+                  }`}
                 onClick={() => handleThemeChange("buttonStyle", "square")}
               >
                 <span className="sample-btn sample-square" />
@@ -161,11 +160,10 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
 
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.buttonStyle === "rounded" || !theme.buttonStyle
+                className={`style-option-btn ${theme.buttonStyle === "rounded" || !theme.buttonStyle
                     ? "active"
                     : ""
-                }`}
+                  }`}
                 onClick={() => handleThemeChange("buttonStyle", "rounded")}
               >
                 <span className="sample-btn sample-rounded" />
@@ -174,9 +172,8 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
 
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.buttonStyle === "pill" ? "active" : ""
-                }`}
+                className={`style-option-btn ${theme.buttonStyle === "pill" ? "active" : ""
+                  }`}
                 onClick={() => handleThemeChange("buttonStyle", "pill")}
               >
                 <span className="sample-btn sample-pill" />
@@ -198,9 +195,8 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
             <div className="button-style-options">
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.contentWidth === "compact" ? "active" : ""
-                }`}
+                className={`style-option-btn ${theme.contentWidth === "compact" ? "active" : ""
+                  }`}
                 onClick={() => handleThemeChange("contentWidth", "compact")}
               >
                 Compact (1000px)
@@ -208,11 +204,10 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
 
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.contentWidth === "normal" || !theme.contentWidth
+                className={`style-option-btn ${theme.contentWidth === "normal" || !theme.contentWidth
                     ? "active"
                     : ""
-                }`}
+                  }`}
                 onClick={() => handleThemeChange("contentWidth", "normal")}
               >
                 Normal (1200px)
@@ -220,9 +215,8 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
 
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.contentWidth === "full" ? "active" : ""
-                }`}
+                className={`style-option-btn ${theme.contentWidth === "full" ? "active" : ""
+                  }`}
                 onClick={() => handleThemeChange("contentWidth", "full")}
               >
                 Full (1440px)
@@ -235,9 +229,8 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
             <div className="button-style-options">
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.sectionSpacing === "compact" ? "active" : ""
-                }`}
+                className={`style-option-btn ${theme.sectionSpacing === "compact" ? "active" : ""
+                  }`}
                 onClick={() => handleThemeChange("sectionSpacing", "compact")}
               >
                 Compact
@@ -245,11 +238,10 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
 
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.sectionSpacing === "normal" || !theme.sectionSpacing
+                className={`style-option-btn ${theme.sectionSpacing === "normal" || !theme.sectionSpacing
                     ? "active"
                     : ""
-                }`}
+                  }`}
                 onClick={() => handleThemeChange("sectionSpacing", "normal")}
               >
                 Normal
@@ -257,9 +249,8 @@ export const ThemeSettingsPanel: React.FC<ThemeSettingsPanelProps> = ({
 
               <button
                 type="button"
-                className={`style-option-btn ${
-                  theme.sectionSpacing === "spacious" ? "active" : ""
-                }`}
+                className={`style-option-btn ${theme.sectionSpacing === "spacious" ? "active" : ""
+                  }`}
                 onClick={() => handleThemeChange("sectionSpacing", "spacious")}
               >
                 Spacious

@@ -87,6 +87,7 @@ export interface StoreItem {
   storeName: string;
   name?: string;
   slug: string;
+  themeId?: string;
   status: "draft" | "published";
   owner?: string | { _id: string; name?: string; email?: string };
   sections: StoreSectionData[];
@@ -95,6 +96,7 @@ export interface StoreItem {
   updatedAt: string;
   publishedVersion?: {
     storeName: string;
+    themeId?: string;
     sections: StoreSectionData[];
     theme: StoreThemeData;
     publishedAt: string;
@@ -163,6 +165,7 @@ export const getStoreById = async (id: string): Promise<StoreItem> => {
 export const createStore = async (payload: {
   storeName: string;
   slug: string;
+  themeId?: string;
 }): Promise<StoreItem> => {
   const token = localStorage.getItem("token");
   if (!token) {
@@ -245,6 +248,7 @@ export const publishStoreById = async (
   payload?: {
     storeName?: string;
     slug?: string;
+    themeId?: string;
     sections?: StoreSectionData[];
     theme?: StoreThemeData;
   }
@@ -478,4 +482,75 @@ export const createWebsite = async (payload: {
   }
 
   return data.website;
+};
+
+export interface UserPlanData {
+  plan: "free" | "premium";
+  isPremiumActive: boolean;
+  premiumExpiresAt: string | null;
+  usage?: {
+    websitesCount: number;
+    storesCount: number;
+    totalCreations: number;
+    maxAllowed: number;
+    remaining: number;
+    canCreate: boolean;
+  };
+}
+
+export const getUserPlan = async (): Promise<UserPlanData | null> => {
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+
+  try {
+    const response = await fetch(`${API_URL}/plan`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data;
+  } catch {
+    return null;
+  }
+};
+
+export const getCurrentUser = async () => {
+  const token = localStorage.getItem("token");
+  if (!token) return null;
+
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.user || data;
+    }
+
+    // Fallback: query /plan
+    const planData = await getUserPlan();
+    if (planData) {
+      let storedUser: any = {};
+      try {
+        storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      } catch {}
+      return {
+        ...storedUser,
+        plan: planData.plan,
+        premiumExpiresAt: planData.premiumExpiresAt,
+        isPremium: planData.isPremiumActive,
+      };
+    }
+  } catch (e) {
+    console.error("Failed to fetch current user profile:", e);
+  }
+  return null;
 };

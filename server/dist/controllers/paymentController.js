@@ -99,7 +99,10 @@ const verifyPremiumPayment = async (req, res) => {
             return;
         }
         const payment = await Payment_1.default.findOne({
-            razorpayOrderId: razorpay_order_id,
+            $or: [
+                { razorpayOrderId: razorpay_order_id },
+                { orderId: razorpay_order_id },
+            ],
             user: userId,
         });
         if (!payment) {
@@ -128,10 +131,10 @@ const verifyPremiumPayment = async (req, res) => {
             .createHmac("sha256", secret)
             .update(`${razorpay_order_id}|${razorpay_payment_id}`)
             .digest("hex");
-        const received = Buffer.from(razorpay_signature, "hex");
-        const expected = Buffer.from(expectedSignature, "hex");
-        if (received.length !== expected.length ||
-            !crypto_1.default.timingSafeEqual(received, expected)) {
+        const isSignatureValid = typeof razorpay_signature === "string" &&
+            razorpay_signature.length === expectedSignature.length &&
+            crypto_1.default.timingSafeEqual(Buffer.from(razorpay_signature, "utf-8"), Buffer.from(expectedSignature, "utf-8"));
+        if (!isSignatureValid) {
             res.status(400).json({
                 success: false,
                 message: "Invalid payment signature.",
@@ -139,7 +142,11 @@ const verifyPremiumPayment = async (req, res) => {
             return;
         }
         const razorpay = (await Promise.resolve().then(() => __importStar(require("../services/paymentService")))).default;
-        const razorpayPayment = await razorpay.payments.fetch(razorpay_payment_id);
+        let razorpayPayment = await razorpay.payments.fetch(razorpay_payment_id);
+        // If payment is in authorized state, capture it to finalize payment
+        if (razorpayPayment.status === "authorized") {
+            razorpayPayment = await razorpay.payments.capture(razorpay_payment_id, payment.amount, payment.currency);
+        }
         if (razorpayPayment.order_id !== razorpay_order_id ||
             razorpayPayment.status !== "captured" ||
             razorpayPayment.amount !== payment.amount ||
@@ -150,11 +157,6 @@ const verifyPremiumPayment = async (req, res) => {
             });
             return;
         }
-        // Update the payment record only after server-side verification.
-        payment.razorpayPaymentId = razorpay_payment_id;
-        payment.status = "paid";
-        payment.premiumExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        await payment.save();
         // Extend an existing active Premium plan; otherwise start from now.
         const user = await User_1.default.findById(userId);
         if (!user) {
@@ -164,6 +166,8 @@ const verifyPremiumPayment = async (req, res) => {
             });
             return;
         }
+        const durationDays = Number(process.env.PREMIUM_PLAN_DURATION_DAYS) || 30;
+        const durationMs = durationDays * 24 * 60 * 60 * 1000;
         const now = new Date();
         const currentExpiry = user.premiumExpiresAt
             ? new Date(user.premiumExpiresAt)
@@ -171,10 +175,17 @@ const verifyPremiumPayment = async (req, res) => {
         const startsFrom = user.plan === "premium" && currentExpiry > now
             ? currentExpiry
             : now;
-        const expiresAt = new Date(startsFrom.getTime() + 30 * 24 * 60 * 60 * 1000);
+        const expiresAt = new Date(startsFrom.getTime() + durationMs);
+        // Update user entitlement
         user.plan = "premium";
         user.premiumExpiresAt = expiresAt;
         await user.save();
+        // Update the payment record only after server-side verification succeeds
+        payment.razorpayPaymentId = razorpay_payment_id;
+        payment.paymentId = razorpay_payment_id;
+        payment.signature = razorpay_signature;
+        payment.status = "paid";
+        payment.durationDays = durationDays;
         payment.premiumExpiresAt = expiresAt;
         await payment.save();
         res.status(200).json({
@@ -183,6 +194,14 @@ const verifyPremiumPayment = async (req, res) => {
             data: {
                 plan: user.plan,
                 premiumExpiresAt: user.premiumExpiresAt,
+                user: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                    plan: user.plan,
+                    premiumExpiresAt: user.premiumExpiresAt,
+                },
             },
         });
     }

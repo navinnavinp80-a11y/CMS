@@ -38,7 +38,7 @@ export const getWebsites = async (
     const baseFilter: Record<string, any> =
       req.user?.role === "admin"
         ? {}
-        : { $or: [{ owner: userId }, { owner: { $exists: false } }, { owner: null }] };
+        : { owner: userId };
 
     let filter = baseFilter;
     if (searchQuery && searchQuery.trim() !== "") {
@@ -227,7 +227,7 @@ export const getWebsiteById = async (
       ? (website.owner as any)._id.toString()
       : website.owner?.toString();
 
-    if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+    if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
       res.status(403).json({ message: "You are not authorized to access this website" });
       return;
     }
@@ -278,7 +278,7 @@ export const updateWebsite = async (
       ? (website.owner as any)._id.toString()
       : website.owner?.toString();
 
-    if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+    if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
       res.status(403).json({ message: "You are not authorized to modify this website" });
       return;
     }
@@ -335,6 +335,21 @@ export const updateWebsite = async (
     }
 
     if (homePage !== undefined) {
+      if (homePage) {
+        if (req.user?.role !== "admin") {
+          const page = await Content.findOne({ _id: homePage, author: userId });
+          if (!page) {
+            res.status(403).json({ message: "You are not authorized to set this page as homePage" });
+            return;
+          }
+        } else {
+          const page = await Content.findById(homePage);
+          if (!page) {
+            res.status(404).json({ message: "Home page content not found" });
+            return;
+          }
+        }
+      }
       website.homePage = homePage || undefined;
     }
 
@@ -389,7 +404,7 @@ export const deleteWebsite = async (
       ? (website.owner as any)._id.toString()
       : website.owner?.toString();
 
-    if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+    if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
       res.status(403).json({ message: "You are not authorized to delete this website" });
       return;
     }
@@ -452,7 +467,7 @@ export const getWebsitePages = async (
       ? (website.owner as any)._id.toString()
       : website.owner?.toString();
 
-    if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+    if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
       res.status(403).json({ message: "You are not authorized to view this website" });
       return;
     }

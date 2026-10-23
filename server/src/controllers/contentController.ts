@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Content from "../models/Content";
 import User from "../models/User";
+import Website from "../models/Website";
 import {
   isTemplatePremium,
   canUserAccessTemplate,
@@ -90,6 +91,12 @@ export const createContent = async (
   res: Response
 ): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized: Missing authentication" });
+      return;
+    }
+
     const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website, templateId } = req.body;
 
     if (!title || !content || !type) {
@@ -103,11 +110,32 @@ export const createContent = async (
     if (templateId) {
       const resolved = resolveTemplateId(templateId);
       if (isTemplatePremium(resolved)) {
-        const user = await User.findById(req.user?.id);
+        const user = await User.findById(userId);
         if (!canUserAccessTemplate(user, resolved)) {
           res.status(403).json({
             message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
             premiumRequired: true,
+          });
+          return;
+        }
+      }
+    }
+
+    // If attaching to a website, verify ownership
+    if (website) {
+      if (req.user?.role !== "admin") {
+        const targetWebsite = await Website.findOne({ _id: website, owner: userId });
+        if (!targetWebsite) {
+          res.status(403).json({
+            message: "You are not authorized to attach content to this website",
+          });
+          return;
+        }
+      } else {
+        const targetWebsite = await Website.findById(website);
+        if (!targetWebsite) {
+          res.status(404).json({
+            message: "Website not found",
           });
           return;
         }
@@ -125,7 +153,7 @@ export const createContent = async (
       featuredImage: featuredImage || "",
       metaTitle: metaTitle || "",
       metaDescription: metaDescription || "",
-      author: req.user?.id,
+      author: userId,
       website: website || undefined,
       templateId: templateId ? resolveTemplateId(templateId) : undefined,
     });
@@ -148,12 +176,40 @@ export const getAllContent = async (
   res: Response
 ): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized: Missing authentication" });
+      return;
+    }
+
     const filter: Record<string, any> = {};
+
+    // Non-admin users only see content they authored
+    if (req.user?.role !== "admin") {
+      filter.author = userId;
+    }
+
     if (req.query.type) {
       filter.type = req.query.type;
     }
+
+    if (req.query.search && String(req.query.search).trim() !== "") {
+      const regex = new RegExp(String(req.query.search).trim(), "i");
+      filter.$or = [{ title: regex }, { slug: regex }];
+    }
+
     if (req.query.website) {
-      filter.website = req.query.website;
+      const websiteId = typeof req.query.website === "string" ? req.query.website : String(req.query.website);
+      if (req.user?.role !== "admin") {
+        const targetWebsite = await Website.findOne({ _id: websiteId, owner: userId });
+        if (!targetWebsite) {
+          res.status(403).json({
+            message: "You are not authorized to view content for this website",
+          });
+          return;
+        }
+      }
+      filter.website = websiteId;
     }
 
     const contents = await Content.find(filter)
@@ -178,6 +234,12 @@ export const getContentById = async (
   res: Response
 ): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized: Missing authentication" });
+      return;
+    }
+
     const { id } = req.params;
 
     const content = await Content.findById(id)
@@ -186,6 +248,19 @@ export const getContentById = async (
     if (!content) {
       res.status(404).json({
         message: "Content not found",
+      });
+      return;
+    }
+
+    const authorId = content.author
+      ? ((content.author as any)?._id
+        ? (content.author as any)._id.toString()
+        : content.author.toString())
+      : null;
+
+    if (req.user?.role !== "admin" && (!authorId || authorId !== userId)) {
+      res.status(403).json({
+        message: "You are not authorized to access this content",
       });
       return;
     }
@@ -208,6 +283,12 @@ export const updateContent = async (
   res: Response
 ): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized: Missing authentication" });
+      return;
+    }
+
     const { id } = req.params;
     const { title, slug, content, type, status, featuredImage, metaTitle, metaDescription, website, templateId } = req.body;
 
@@ -220,8 +301,13 @@ export const updateContent = async (
       return;
     }
 
-    const authorId = existingContent.author?.toString();
-    if (authorId && authorId !== req.user?.id && req.user?.role !== "admin") {
+    const authorId = existingContent.author
+      ? ((existingContent.author as any)?._id
+        ? (existingContent.author as any)._id.toString()
+        : existingContent.author.toString())
+      : null;
+
+    if (req.user?.role !== "admin" && (!authorId || authorId !== userId)) {
       res.status(403).json({
         message: "You are not authorized to modify this content",
       });
@@ -232,7 +318,7 @@ export const updateContent = async (
     if (templateId !== undefined && templateId) {
       const resolved = resolveTemplateId(templateId);
       if (isTemplatePremium(resolved)) {
-        const user = await User.findById(req.user?.id);
+        const user = await User.findById(userId);
         if (!canUserAccessTemplate(user, resolved)) {
           res.status(403).json({
             message: "The selected template requires a Premium plan. Upgrade to unlock this template.",
@@ -242,6 +328,27 @@ export const updateContent = async (
         }
       }
       existingContent.templateId = resolved;
+    }
+
+    // If reassigning website, verify website ownership
+    if (website !== undefined && website) {
+      if (req.user?.role !== "admin") {
+        const targetWebsite = await Website.findOne({ _id: website, owner: userId });
+        if (!targetWebsite) {
+          res.status(403).json({
+            message: "You are not authorized to attach content to this website",
+          });
+          return;
+        }
+      } else {
+        const targetWebsite = await Website.findById(website);
+        if (!targetWebsite) {
+          res.status(404).json({
+            message: "Website not found",
+          });
+          return;
+        }
+      }
     }
 
     const idParam = Array.isArray(id) ? id[0] : String(id);
@@ -287,6 +394,12 @@ export const deleteContent = async (
   res: Response
 ): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized: Missing authentication" });
+      return;
+    }
+
     const { id } = req.params;
 
     const content = await Content.findById(id);
@@ -298,8 +411,13 @@ export const deleteContent = async (
       return;
     }
 
-    const authorId = content.author?.toString();
-    if (authorId && authorId !== req.user?.id && req.user?.role !== "admin") {
+    const authorId = content.author
+      ? ((content.author as any)?._id
+        ? (content.author as any)._id.toString()
+        : content.author.toString())
+      : null;
+
+    if (req.user?.role !== "admin" && (!authorId || authorId !== userId)) {
       res.status(403).json({
         message: "You are not authorized to delete this content",
       });

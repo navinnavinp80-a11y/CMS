@@ -12,6 +12,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import "./Sidebar.css";
+import { useAuth } from "../../context/AuthContext";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -27,6 +28,7 @@ export default function Sidebar({
   onCloseMobile,
   contentCount,
 }: SidebarProps) {
+  const { isPremium } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [internalCount, setInternalCount] = useState<number>(contentCount ?? 0);
@@ -173,11 +175,11 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Upgrade Plan Card */}
+        {/* Upgrade / Plan Status Card */}
         {!collapsed && (
           <div className="sidebar-footer-container">
             <div
-              className="upgrade-plan-card"
+              className={`upgrade-plan-card ${isPremium ? "upgrade-plan-card-premium" : ""}`}
               onClick={() => handleNavigate("/premium")}
               role="button"
               tabIndex={0}
@@ -186,8 +188,12 @@ export default function Sidebar({
                 <Sparkles size={18} />
               </div>
               <div className="upgrade-text-box">
-                <span className="upgrade-title">Upgrade Plan</span>
-                <span className="upgrade-subtitle">Get unlimited access</span>
+                <span className="upgrade-title">
+                  {isPremium ? "✦ Premium Active" : "Upgrade Plan"}
+                </span>
+                <span className="upgrade-subtitle">
+                  {isPremium ? "Full template access" : "Get unlimited access"}
+                </span>
               </div>
             </div>
           </div>

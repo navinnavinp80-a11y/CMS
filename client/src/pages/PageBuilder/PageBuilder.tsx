@@ -1425,9 +1425,8 @@ function PageBuilder() {
           onDrop={(e) => !isPreviewMode && handleCanvasDrop(e)}
         >
           <div
-            className={`page-canvas ${isPreviewMode ? "preview-canvas" : ""} device-${deviceMode} ${
-              components.find((c) => c.variant)?.variant ? `theme-${components.find((c) => c.variant)?.variant}` : ""
-            }`}
+            className={`page-canvas ${isPreviewMode ? "preview-canvas" : ""} device-${deviceMode} ${components.find((c) => c.variant)?.variant ? `theme-${components.find((c) => c.variant)?.variant}` : ""
+              }`}
           >
             {/* CANVAS BROWSER CHROME HEADER */}
             <div className="canvas-browser-chrome">

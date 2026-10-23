@@ -33,7 +33,7 @@ const getWebsites = async (req, res) => {
         const searchQuery = req.query.search;
         const baseFilter = req.user?.role === "admin"
             ? {}
-            : { $or: [{ owner: userId }, { owner: { $exists: false } }, { owner: null }] };
+            : { owner: userId };
         let filter = baseFilter;
         if (searchQuery && searchQuery.trim() !== "") {
             const regex = new RegExp(searchQuery.trim(), "i");
@@ -199,7 +199,7 @@ const getWebsiteById = async (req, res) => {
         const websiteOwnerId = website.owner?._id
             ? website.owner._id.toString()
             : website.owner?.toString();
-        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to access this website" });
             return;
         }
@@ -241,7 +241,7 @@ const updateWebsite = async (req, res) => {
         const websiteOwnerId = website.owner?._id
             ? website.owner._id.toString()
             : website.owner?.toString();
-        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to modify this website" });
             return;
         }
@@ -292,6 +292,22 @@ const updateWebsite = async (req, res) => {
             website.status = status;
         }
         if (homePage !== undefined) {
+            if (homePage) {
+                if (req.user?.role !== "admin") {
+                    const page = await Content_1.default.findOne({ _id: homePage, author: userId });
+                    if (!page) {
+                        res.status(403).json({ message: "You are not authorized to set this page as homePage" });
+                        return;
+                    }
+                }
+                else {
+                    const page = await Content_1.default.findById(homePage);
+                    if (!page) {
+                        res.status(404).json({ message: "Home page content not found" });
+                        return;
+                    }
+                }
+            }
             website.homePage = homePage || undefined;
         }
         if (settings !== undefined) {
@@ -337,7 +353,7 @@ const deleteWebsite = async (req, res) => {
         const websiteOwnerId = website.owner?._id
             ? website.owner._id.toString()
             : website.owner?.toString();
-        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to delete this website" });
             return;
         }
@@ -392,7 +408,7 @@ const getWebsitePages = async (req, res) => {
         const websiteOwnerId = website.owner?._id
             ? website.owner._id.toString()
             : website.owner?.toString();
-        if (websiteOwnerId && websiteOwnerId !== userId && req.user?.role !== "admin") {
+        if (req.user?.role !== "admin" && (!websiteOwnerId || websiteOwnerId !== userId)) {
             res.status(403).json({ message: "You are not authorized to view this website" });
             return;
         }

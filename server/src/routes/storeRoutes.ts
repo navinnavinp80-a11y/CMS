@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getStores,
+  getStoreThemes,
   createStore,
   getStoreById,
   updateStore,
@@ -13,6 +14,9 @@ import { protect } from "../middleware/authMiddleware";
 import { requireStoreCreationEntitlement } from "../middleware/planMiddleware";
 
 const router = Router();
+
+// Themes listing with user entitlement
+router.get("/themes", protect, getStoreThemes);
 
 // Store CRUD routes
 router.get("/", protect, getStores);

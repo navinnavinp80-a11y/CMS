@@ -5,6 +5,8 @@ const storeController_1 = require("../controllers/storeController");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const planMiddleware_1 = require("../middleware/planMiddleware");
 const router = (0, express_1.Router)();
+// Themes listing with user entitlement
+router.get("/themes", authMiddleware_1.protect, storeController_1.getStoreThemes);
 // Store CRUD routes
 router.get("/", authMiddleware_1.protect, storeController_1.getStores);
 router.post("/", authMiddleware_1.protect, planMiddleware_1.requireStoreCreationEntitlement, storeController_1.createStore);

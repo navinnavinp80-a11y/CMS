@@ -22,7 +22,7 @@ export function normalizeNavbarUrl(rawUrl: string = ""): {
       if (typeof window !== "undefined" && parsed.host === window.location.host) {
         return { url: parsed.pathname || "/", isExternal: false };
       }
-    } catch {}
+    } catch { }
     return { url: trimmed, isExternal: true };
   }
 

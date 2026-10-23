@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { getCurrentUser } from "../services/api";
 
 export interface UserSession {
   id?: string;
@@ -18,6 +19,8 @@ export interface AuthContextType {
   login: (token: string, user?: UserSession) => void;
   logout: () => void;
   checkTokenValidity: () => boolean;
+  refreshUser: () => Promise<UserSession | null>;
+  updateUser: (updatedFields: Partial<UserSession>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,6 +75,7 @@ export function clearStoredAuth(): void {
   try {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("cms_site_settings");
   } catch (e) {
     console.error("Failed to clear localStorage:", e);
   }
@@ -148,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      clearStoredAuth();
       localStorage.setItem("token", newToken);
       if (newUser) {
         localStorage.setItem("user", JSON.stringify(newUser));
@@ -171,6 +176,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: false,
     });
   }, []);
+
+  const updateUser = useCallback((updatedFields: Partial<UserSession>) => {
+    setAuthState((prev) => {
+      const mergedUser: UserSession = prev.user
+        ? { ...prev.user, ...updatedFields }
+        : (updatedFields as UserSession);
+      try {
+        localStorage.setItem("user", JSON.stringify(mergedUser));
+      } catch (e) {
+        console.error("Error saving updated user session:", e);
+      }
+      return {
+        ...prev,
+        user: mergedUser,
+      };
+    });
+  }, []);
+
+  const refreshUser = useCallback(async (): Promise<UserSession | null> => {
+    const currentToken = localStorage.getItem("token");
+    if (!currentToken || !isTokenValid(currentToken)) {
+      return null;
+    }
+
+    try {
+      const freshUser = await getCurrentUser();
+      if (freshUser) {
+        const normalizedUser: UserSession = {
+          id: freshUser.id || freshUser._id,
+          name: freshUser.name,
+          email: freshUser.email,
+          role: freshUser.role,
+          plan: freshUser.plan,
+          premiumExpiresAt: freshUser.premiumExpiresAt,
+        };
+
+        try {
+          localStorage.setItem("user", JSON.stringify(normalizedUser));
+        } catch { }
+
+        setAuthState((prev) => ({
+          ...prev,
+          user: normalizedUser,
+          isAuthenticated: true,
+        }));
+
+        return normalizedUser;
+      }
+    } catch (err) {
+      console.error("Failed to refresh user profile from server:", err);
+    }
+    return null;
+  }, []);
+
+  // Automatically refresh user plan and entitlement status from the server on mount if authenticated
+  useEffect(() => {
+    const currentToken = localStorage.getItem("token");
+    if (currentToken && isTokenValid(currentToken)) {
+      refreshUser();
+    }
+  }, [refreshUser]);
 
   // Periodic check / storage sync (e.g. if token expires or tab logs out)
   useEffect(() => {
@@ -207,7 +273,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isPremium = Boolean(
     authState.user?.role === "admin" ||
     (authState.user?.plan === "premium" &&
-      (!authState.user?.premiumExpiresAt || new Date(authState.user.premiumExpiresAt).getTime() > Date.now()))
+      Boolean(authState.user?.premiumExpiresAt) &&
+      new Date(authState.user.premiumExpiresAt!).getTime() > Date.now())
   );
 
   return (
@@ -221,6 +288,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         checkTokenValidity,
+        refreshUser,
+        updateUser,
       }}
     >
       {children}

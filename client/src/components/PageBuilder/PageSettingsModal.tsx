@@ -99,19 +99,19 @@ export const PageSettingsModal: React.FC<PageSettingsModalProps> = ({
     metaTitleLen === 0
       ? "#64748b"
       : metaTitleLen >= 50 && metaTitleLen <= 60
-      ? "#16a34a"
-      : metaTitleLen > 60
-      ? "#eab308"
-      : "#64748b";
+        ? "#16a34a"
+        : metaTitleLen > 60
+          ? "#eab308"
+          : "#64748b";
 
   const metaDescColor =
     metaDescLen === 0
       ? "#64748b"
       : metaDescLen >= 150 && metaDescLen <= 160
-      ? "#16a34a"
-      : metaDescLen > 160
-      ? "#eab308"
-      : "#64748b";
+        ? "#16a34a"
+        : metaDescLen > 160
+          ? "#eab308"
+          : "#64748b";
 
   return (
     <div className="settings-modal-overlay" onClick={onClose}>
@@ -214,9 +214,8 @@ export const PageSettingsModal: React.FC<PageSettingsModalProps> = ({
                 <label>Publishing Status</label>
                 <div className="status-selector">
                   <label
-                    className={`status-option ${
-                      status === "draft" ? "selected draft" : ""
-                    }`}
+                    className={`status-option ${status === "draft" ? "selected draft" : ""
+                      }`}
                   >
                     <input
                       type="radio"
@@ -233,9 +232,8 @@ export const PageSettingsModal: React.FC<PageSettingsModalProps> = ({
                   </label>
 
                   <label
-                    className={`status-option ${
-                      status === "published" ? "selected published" : ""
-                    }`}
+                    className={`status-option ${status === "published" ? "selected published" : ""
+                      }`}
                   >
                     <input
                       type="radio"

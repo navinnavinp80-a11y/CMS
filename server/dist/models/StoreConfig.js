@@ -86,6 +86,11 @@ const storeConfigSchema = new mongoose_1.Schema({
         unique: true,
         index: true,
     },
+    themeId: {
+        type: String,
+        default: "electronics-store",
+        trim: true,
+    },
     status: {
         type: String,
         enum: ["draft", "published"],
@@ -101,6 +106,7 @@ const storeConfigSchema = new mongoose_1.Schema({
     },
     publishedVersion: {
         storeName: { type: String },
+        themeId: { type: String, default: "electronics-store" },
         sections: { type: [sectionSchema] },
         theme: { type: themeSchema },
         publishedAt: { type: Date },

@@ -41,14 +41,21 @@ exports.getUserCreationsCount = getUserCreationsCount;
  * An expired Premium subscription cannot bypass the Free plan limit.
  */
 const isUserPremiumActive = (user) => {
-    if (!user || user.plan !== "premium") {
+    if (!user) {
         return false;
     }
-    if (user.premiumExpiresAt) {
-        const expiresAt = new Date(user.premiumExpiresAt).getTime();
-        if (expiresAt <= Date.now()) {
-            return false; // Expired
-        }
+    if ("role" in user && user.role === "admin") {
+        return true;
+    }
+    if (user.plan !== "premium") {
+        return false;
+    }
+    if (!user.premiumExpiresAt) {
+        return false;
+    }
+    const expiresAt = new Date(user.premiumExpiresAt).getTime();
+    if (isNaN(expiresAt) || expiresAt <= Date.now()) {
+        return false; // Expired
     }
     return true;
 };

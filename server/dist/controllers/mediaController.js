@@ -5,10 +5,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteMedia = exports.getMediaById = exports.getAllMedia = exports.uploadMedia = void 0;
 const Media_1 = __importDefault(require("../models/Media"));
+const Website_1 = __importDefault(require("../models/Website"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const uploadMedia = async (req, res) => {
     try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
+            return;
+        }
         if (!req.file) {
             res.status(400).json({
                 message: "No file uploaded",
@@ -26,12 +32,34 @@ const uploadMedia = async (req, res) => {
             });
             return;
         }
+        const { website } = req.body;
+        if (website) {
+            if (req.user?.role !== "admin") {
+                const targetWebsite = await Website_1.default.findOne({ _id: website, owner: userId });
+                if (!targetWebsite) {
+                    res.status(403).json({
+                        message: "You are not authorized to attach media to this website",
+                    });
+                    return;
+                }
+            }
+            else {
+                const targetWebsite = await Website_1.default.findById(website);
+                if (!targetWebsite) {
+                    res.status(404).json({
+                        message: "Website not found",
+                    });
+                    return;
+                }
+            }
+        }
         const media = await Media_1.default.create({
             filename: req.file.filename,
             originalName: req.file.originalname,
             url: `/uploads/${req.file.filename}`,
             type: fileType,
-            uploadedBy: req.user?.id,
+            uploadedBy: userId,
+            website: website || undefined,
         });
         res.status(201).json({
             message: "Media uploaded successfully",
@@ -48,7 +76,30 @@ const uploadMedia = async (req, res) => {
 exports.uploadMedia = uploadMedia;
 const getAllMedia = async (req, res) => {
     try {
-        const media = await Media_1.default.find()
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
+            return;
+        }
+        const filter = {};
+        // Non-admin users only see media they uploaded
+        if (req.user?.role !== "admin") {
+            filter.uploadedBy = userId;
+        }
+        if (req.query.website) {
+            const websiteId = typeof req.query.website === "string" ? req.query.website : String(req.query.website);
+            if (req.user?.role !== "admin") {
+                const targetWebsite = await Website_1.default.findOne({ _id: websiteId, owner: userId });
+                if (!targetWebsite) {
+                    res.status(403).json({
+                        message: "You are not authorized to view media for this website",
+                    });
+                    return;
+                }
+            }
+            filter.website = websiteId;
+        }
+        const media = await Media_1.default.find(filter)
             .populate("uploadedBy", "name email role")
             .sort({ createdAt: -1 });
         res.status(200).json({
@@ -66,12 +117,28 @@ const getAllMedia = async (req, res) => {
 exports.getAllMedia = getAllMedia;
 const getMediaById = async (req, res) => {
     try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
+            return;
+        }
         const { id } = req.params;
         const media = await Media_1.default.findById(id)
             .populate("uploadedBy", "name email role");
         if (!media) {
             res.status(404).json({
                 message: "Media not found",
+            });
+            return;
+        }
+        const uploaderId = media.uploadedBy
+            ? (media.uploadedBy?._id
+                ? media.uploadedBy._id.toString()
+                : media.uploadedBy.toString())
+            : null;
+        if (req.user?.role !== "admin" && (!uploaderId || uploaderId !== userId)) {
+            res.status(403).json({
+                message: "You are not authorized to access this media asset",
             });
             return;
         }
@@ -90,6 +157,11 @@ const getMediaById = async (req, res) => {
 exports.getMediaById = getMediaById;
 const deleteMedia = async (req, res) => {
     try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ message: "Unauthorized: Missing authentication" });
+            return;
+        }
         const { id } = req.params;
         const media = await Media_1.default.findById(id);
         if (!media) {
@@ -98,8 +170,12 @@ const deleteMedia = async (req, res) => {
             });
             return;
         }
-        const uploaderId = media.uploadedBy?.toString();
-        if (uploaderId && uploaderId !== req.user?.id && req.user?.role !== "admin") {
+        const uploaderId = media.uploadedBy
+            ? (media.uploadedBy?._id
+                ? media.uploadedBy._id.toString()
+                : media.uploadedBy.toString())
+            : null;
+        if (req.user?.role !== "admin" && (!uploaderId || uploaderId !== userId)) {
             res.status(403).json({
                 message: "You are not authorized to delete this media asset",
             });
@@ -107,7 +183,12 @@ const deleteMedia = async (req, res) => {
         }
         const filePath = path_1.default.join(process.cwd(), "uploads", media.filename);
         if (fs_1.default.existsSync(filePath)) {
-            fs_1.default.unlinkSync(filePath);
+            try {
+                fs_1.default.unlinkSync(filePath);
+            }
+            catch (err) {
+                console.error("Failed to delete local media file:", err);
+            }
         }
         await Media_1.default.findByIdAndDelete(id);
         res.status(200).json({

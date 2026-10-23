@@ -533,9 +533,8 @@ export const SectionSettingsPanel: React.FC<SectionSettingsPanelProps> = ({
                   return (
                     <div
                       key={prod.id || pIdx}
-                      className={`settings-product-accordion-item ${
-                        isExpanded ? "expanded" : ""
-                      }`}
+                      className={`settings-product-accordion-item ${isExpanded ? "expanded" : ""
+                        }`}
                     >
                       <div
                         className="accordion-item-summary"

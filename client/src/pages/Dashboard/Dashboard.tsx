@@ -183,13 +183,13 @@ export default function Dashboard() {
   const performanceData =
     stats.popularArticles.length > 0
       ? stats.popularArticles.map((item) => ({
-          name: item.title.length > 14 ? `${item.title.slice(0, 12)}…` : item.title,
-          value: item.visits,
-        }))
+        name: item.title.length > 14 ? `${item.title.slice(0, 12)}…` : item.title,
+        value: item.visits,
+      }))
       : [
-          { name: "Posts", value: stats.totalPosts },
-          { name: "Pages", value: stats.totalPages },
-        ];
+        { name: "Posts", value: stats.totalPosts },
+        { name: "Pages", value: stats.totalPages },
+      ];
 
   const hasPerformanceData =
     stats.popularArticles.length > 0 || stats.totalPosts > 0 || stats.totalPages > 0;
@@ -558,8 +558,8 @@ export default function Dashboard() {
                         act.type === "page"
                           ? "#8B5CF6"
                           : act.type === "media"
-                          ? "#F59E0B"
-                          : "#2563EB",
+                            ? "#F59E0B"
+                            : "#2563EB",
                     }}
                   >
                     {act.type === "media" ? "M" : act.type === "page" ? "P" : "B"}

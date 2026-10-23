@@ -22,11 +22,13 @@ export interface IStoreConfig extends Document {
   storeName: string;
   name?: string;
   slug: string;
+  themeId?: string;
   status: "draft" | "published";
   sections: IStoreSection[];
   theme: IStoreTheme;
   publishedVersion?: {
     storeName: string;
+    themeId?: string;
     sections: IStoreSection[];
     theme: IStoreTheme;
     publishedAt: Date;
@@ -96,6 +98,11 @@ const storeConfigSchema = new Schema<IStoreConfig>(
       unique: true,
       index: true,
     },
+    themeId: {
+      type: String,
+      default: "electronics-store",
+      trim: true,
+    },
     status: {
       type: String,
       enum: ["draft", "published"],
@@ -111,6 +118,7 @@ const storeConfigSchema = new Schema<IStoreConfig>(
     },
     publishedVersion: {
       storeName: { type: String },
+      themeId: { type: String, default: "electronics-store" },
       sections: { type: [sectionSchema] },
       theme: { type: themeSchema },
       publishedAt: { type: Date },

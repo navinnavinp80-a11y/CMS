@@ -1,0 +1,71 @@
+/* ==========================================================================
+   Electronics Store Theme Styles
+   Access Level: FREE
+   Category: Consumer Electronics, Laptops, Audio, Smart Tech
+   ========================================================================== */
+
+.theme-electronics-store {
+  --store-primary: #0f172a;
+  --store-secondary: #2563eb;
+  --store-accent: #3b82f6;
+  --store-bg: #ffffff;
+  --store-card-bg: #f8fafc;
+  --store-border: #e2e8f0;
+  --store-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --store-btn-radius: 8px;
+  font-family: var(--store-font);
+}
+
+.theme-electronics-store .storefront-announcement {
+  background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%) !important;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.theme-electronics-store .storefront-header {
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.theme-electronics-store .storefront-brand-icon {
+  color: #2563eb;
+}
+
+.theme-electronics-store .storefront-hero {
+  background: linear-gradient(135deg, #f0f4f8 0%, #dbeafe 100%) !important;
+}
+
+.theme-electronics-store .hero-title {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+}
+
+.theme-electronics-store .hero-subtitle {
+  color: #2563eb !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  font-size: 0.85rem !important;
+  letter-spacing: 0.08em;
+}
+
+.theme-electronics-store .storefront-product-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: #ffffff;
+}
+
+.theme-electronics-store .storefront-product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -8px rgba(37, 99, 235, 0.12);
+  border-color: #93c5fd;
+}
+
+.theme-electronics-store .product-badge {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  border-radius: 6px;
+}

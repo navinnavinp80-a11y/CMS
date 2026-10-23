@@ -234,8 +234,11 @@ export default function Content() {
       return;
     }
 
-    if (selectedTemplateId === "premium-saas" && !isPremium) {
-      setWebsiteModalError("The Obsidian SaaS template is exclusive to Premium subscribers. Upgrade your account or select a Free template.");
+    const chosenTemplate = PAGE_TEMPLATES.find(
+      (t) => t.id === selectedTemplateId || t.legacyId === selectedTemplateId
+    );
+    if (chosenTemplate?.plan === "premium" && !isPremium) {
+      setWebsiteModalError(`"${chosenTemplate.name}" is exclusive to Premium subscribers. Upgrade your account or select a Free template.`);
       return;
     }
 
